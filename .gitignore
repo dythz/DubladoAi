@@ -1,0 +1,54 @@
+# Projetos e uploads dos usuários
+data/projects/
+data/models/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Ambientes virtuais
+venv/
+env/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Variáveis de ambiente
+.env
+.env.local
+
+# Ambientes do LuminaDub
+.venv-fast/
+
+# Dados locais (aulas, vozes, modelos baixados, amostras de teste)
+data/
+amostras/
+
+# Configuração local do Claude Code
+.claude/
+
+# Scripts de limpeza com caminhos de uma maquina especifica
+clean-projects.bat
+clean-claude-projects.bat
+
+# Workflow de build Docker (precisa dos segredos do Docker Hub do dono)
+.github/

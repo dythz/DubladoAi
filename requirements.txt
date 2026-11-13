@@ -1,0 +1,33 @@
+# Core ML
+# Install torch from the CUDA index first:
+#   pip install torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu126
+torch==2.7.1
+torchaudio==2.7.1
+faster-whisper>=1.0.0
+demucs>=4.0.0
+# faster-qwen3-tts needs transformers 5; qwen-tts-hf breaks on 5.22 (Mimi
+# encoder 'upsample' property), 5.15.1 is the version it was verified on.
+transformers==5.15.1
+sentencepiece>=0.2.0
+sacremoses>=0.1.0
+edge-tts>=7.3.1
+faster-qwen3-tts==0.5.4  # pulls qwen-tts-hf (do not install upstream qwen-tts alongside)
+deepfilternet>=0.5.6
+
+# Web UI
+gradio>=5.0.0
+flask>=2.0.0
+flask-cors>=3.0.0
+waitress>=2.1.0
+gunicorn>=21.0.0
+gevent>=23.0.0
+
+# Audio processing
+soundfile>=0.12.0
+numpy>=1.24.0,<2  # deepfilternet
+pandas<3  # pandas 3 wants numpy 2
+audiostretchy>=1.2.0
+
+# Utilities
+psutil>=5.9.0
+pysubs2>=1.7.0

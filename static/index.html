@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LuminaDub AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"on-surface":"#ecedf6","tertiary-dim":"#00bdeb","primary-fixed":"#00f9cc","surface-container-high":"#1c2028","surface-container-low":"#10131a","surface-container-lowest":"#000000","surface-container":"#161a21","background":"#0b0e14","outline":"#73757d","outline-variant":"#45484f","primary":"#b9ffe8","primary-dim":"#00e9bf","tertiary":"#67d7ff","on-surface-variant":"#a9abb3","on-primary-fixed":"#004436","error-container":"#9f0519","on-error-container":"#ffa8a3","surface-bright":"#282c36","surface-dim":"#0b0e14","secondary":"#ac8aff","secondary-dim":"#8455ef","secondary-container":"#5516be","error":"#ff716c"},fontFamily:{headline:["Manrope"],body:["Manrope"],label:["Space Grotesk"]}}}}
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}
+body{font-family:'Manrope',sans-serif;font-feature-settings:'cv02','cv03','cv04','cv11';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+.font-label{font-family:'Space Grotesk',monospace}
+.glass{background:rgba(38,38,39,0.6);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border:1px solid rgba(185,255,232,0.1);box-shadow:0 8px 32px rgba(0,0,0,0.3);transition:box-shadow .3s ease,border-color .3s ease}
+.glass:hover{border-color:rgba(185,255,232,0.2)}
+.inner-glow{box-shadow:inset 0 0 0 1px rgba(185,255,232,0.08)}
+.neon-glow{text-shadow:0 0 8px rgba(185,255,232,0.5)}
+.drop-over{border-color:#00e9bf!important;background:rgba(0,233,191,0.05)!important}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#161a21}::-webkit-scrollbar-thumb{background:#45484f;border-radius:3px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes pulse-glow{0%,100%{filter:drop-shadow(0 0 2px rgba(0,189,235,0.3))}50%{filter:drop-shadow(0 0 8px rgba(0,189,235,0.7))}}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.animate-spin{animation:spin 1s linear infinite,pulse-glow 2s ease-in-out infinite}
+.shimmer{position:relative;overflow:hidden}.shimmer::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent);animation:shimmer 2s infinite}
+#progressBar{transition:width .5s cubic-bezier(.4,0,.2,1)}
+.stage-bar div{transition:width .3s cubic-bezier(.4,0,.2,1)}
+.btn-glow{transition:transform .15s ease,box-shadow .3s ease}.btn-glow:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 0 60px rgba(0,255,209,0.4)}.btn-glow:active:not(:disabled){transform:translateY(0) scale(.98)}
+
+/* ── Entrance / micro-interactions ── */
+@keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes popIn{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+@keyframes slideInRight{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+@keyframes blobDrift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(3%,-4%) scale(1.08)}66%{transform:translate(-3%,3%) scale(0.95)}}
+@keyframes progressGlowPulse{0%,100%{box-shadow:0 0 10px rgba(0,255,209,0.4)}50%{box-shadow:0 0 22px rgba(0,255,209,0.75)}}
+
+.anim-in{animation:fadeInUp .5s cubic-bezier(.16,1,.3,1) both}
+.anim-in-delay-1{animation-delay:.06s}
+.anim-in-delay-2{animation-delay:.12s}
+.anim-in-delay-3{animation-delay:.18s}
+[data-stage]{transition:opacity .35s ease}
+[data-stage] .material-symbols-outlined{transition:color .3s ease,transform .3s cubic-bezier(.34,1.56,.64,1)}
+[data-stage].stage-pop .material-symbols-outlined{animation:popIn .4s cubic-bezier(.34,1.56,.64,1)}
+.queue-item{animation:slideInRight .35s ease both}
+#progressBar.progress-active{animation:progressGlowPulse 1.8s ease-in-out infinite}
+.hero-blob{position:absolute;width:420px;height:420px;border-radius:50%;filter:blur(90px);opacity:.16;background:radial-gradient(circle,#00e9bf,transparent 70%);animation:blobDrift 14s ease-in-out infinite;pointer-events:none;z-index:0}
+.uploadIcon-pulse{animation:popIn .4s cubic-bezier(.34,1.56,.64,1)}
+@media (prefers-reduced-motion: reduce){.anim-in,.queue-item,.hero-blob,#progressBar.progress-active,[data-stage].stage-pop .material-symbols-outlined{animation:none}}
+/* Toggle */
+.toggle-track{width:36px;height:20px;border-radius:10px;background:#1c2028;position:relative;cursor:pointer;transition:background .3s;border:1px solid rgba(69,72,79,0.3)}
+.toggle-track.active{background:rgba(0,233,191,0.2);border-color:rgba(0,233,191,0.4)}
+.toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#73757d;transition:transform .3s,background .3s}
+.toggle-track.active .toggle-knob{transform:translateX(16px);background:#00e9bf}
+/* Video player */
+.video-wrapper{position:relative;background:#000;border-radius:12px 12px 0 0;overflow:hidden}
+.video-wrapper video{display:block;width:100%}
+.video-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.5) 50%,transparent 100%);padding:20px 20px 14px;opacity:0;transition:opacity .3s}
+.video-wrapper:hover .video-controls{opacity:1}
+.seek-bar{width:100%;height:4px;background:rgba(255,255,255,.12);border-radius:4px;cursor:pointer;margin-bottom:12px;transition:height .15s}
+.seek-bar:hover{height:6px}
+.seek-fill{height:100%;background:linear-gradient(90deg,#00e9bf,#67d7ff);border-radius:4px;position:relative;pointer-events:none}
+.seek-fill::after{content:'';position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:#00e9bf;border-radius:50%;opacity:0;transition:opacity .15s;box-shadow:0 0 8px rgba(0,233,191,0.6)}
+.seek-bar:hover .seek-fill::after{opacity:1}
+/* Queue items */
+.queue-item{transition:border-color .2s,opacity .2s}
+.queue-item:hover{border-color:rgba(185,255,232,0.25)}
+.queue-item[data-status="done"]{opacity:.6}
+.queue-item[data-status="queued"]{opacity:.5}
+/* Animated title gradient */
+@keyframes bgShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.title-shift{background-image:linear-gradient(90deg,#b9ffe8,#67d7ff,#ac8aff,#b9ffe8);background-size:300% 100%;animation:bgShift 8s ease-in-out infinite}
+/* Option buttons */
+.opt-btn{transition:background .2s,color .2s,transform .15s,box-shadow .2s}
+.opt-btn:hover{transform:translateY(-1px)}
+.opt-btn:active{transform:scale(.96)}
+.opt-hint{min-height:14px;transition:opacity .25s}
+/* Equalizer while processing */
+.eq{display:inline-flex;align-items:flex-end;gap:2px;height:14px}
+.eq span{width:3px;background:linear-gradient(to top,#00e9bf,#67d7ff);border-radius:2px;animation:eqBounce 1s ease-in-out infinite}
+.eq span:nth-child(2){animation-delay:.15s}.eq span:nth-child(3){animation-delay:.3s}.eq span:nth-child(4){animation-delay:.45s}
+@keyframes eqBounce{0%,100%{height:3px}50%{height:14px}}
+/* GPU widget */
+.vram-bar{width:56px;height:4px;border-radius:2px;background:#1c2028;overflow:hidden}
+.vram-bar div{height:100%;background:linear-gradient(90deg,#00e9bf,#67d7ff);transition:width .6s ease,background .3s}
+/* Toasts */
+#toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;background:rgba(28,32,40,.95);border:1px solid rgba(185,255,232,.15);box-shadow:0 10px 30px rgba(0,0,0,.5);animation:fadeInUp .35s cubic-bezier(.16,1,.3,1) both}
+.toast.out{animation:fadeOut .3s ease forwards}
+@keyframes fadeOut{to{opacity:0;transform:translateY(8px)}}
+/* Big play overlay */
+.play-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:opacity .25s}
+.play-overlay span{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(0,233,191,.18);border:1px solid rgba(0,233,191,.5);backdrop-filter:blur(8px);color:#b9ffe8;font-size:40px;transition:transform .2s}
+.play-overlay:hover span{transform:scale(1.08)}
+.play-overlay.gone{opacity:0;pointer-events:none}
+.ctrl-btn{color:rgba(255,255,255,.65);transition:color .15s,transform .15s}.ctrl-btn:hover{color:#fff;transform:scale(1.1)}
+kbd{font-family:'Space Grotesk',monospace;font-size:9px;padding:1px 5px;border-radius:4px;background:#1c2028;border:1px solid #45484f;color:#a9abb3}
+/* Confetti */
+.confetti{position:fixed;top:-12px;width:8px;height:12px;z-index:99;pointer-events:none;animation:confettiFall linear forwards}
+@keyframes confettiFall{to{transform:translateY(105vh) rotate(720deg);opacity:.2}}
+@media (prefers-reduced-motion: reduce){.title-shift,.eq span,.confetti{animation:none}}
+</style>
+</head>
+<body class="bg-background text-on-surface h-screen overflow-hidden flex flex-col">
+
+<!-- Header -->
+<nav class="flex items-center justify-between px-6 h-14 bg-surface-dim border-b border-white/5 z-50 flex-shrink-0">
+<div class="flex items-center gap-3">
+<svg class="size-6 text-primary-dim" fill="none" viewBox="0 0 48 48"><path d="M6 6H42L36 24L42 42H6L12 24L6 6Z" fill="currentColor"/></svg>
+<span class="text-lg font-extrabold tracking-tight text-on-surface">LuminaDub AI</span>
+</div>
+<div class="flex items-center gap-4">
+<span id="gpuWidget" class="flex items-center gap-2 text-xs text-on-surface-variant font-label" title="Placa de video">
+<span id="gpuDot" class="size-1.5 bg-primary-dim rounded-full animate-pulse"></span><span id="gpuName">GPU</span>
+<span class="vram-bar"><div id="gpuBar" style="width:0%"></div></span>
+<span id="gpuText" class="text-[10px]">--</span>
+</span>
+<span id="headerStatus" class="px-2 py-0.5 rounded text-[10px] font-label font-bold uppercase tracking-wider bg-surface-container-high text-on-surface-variant">Aguardando</span>
+</div>
+</nav>
+
+<div class="flex flex-1 overflow-hidden">
+
+<!-- Main Content -->
+<main class="flex-1 flex flex-col overflow-y-auto p-6">
+<!-- Hero -->
+<div class="mb-6 relative anim-in">
+<div class="hero-blob" style="top:-160px;left:-80px"></div>
+<h1 class="text-3xl font-extrabold tracking-tight mb-1 relative">Dublagem com <span class="text-transparent bg-clip-text title-shift">Inteligencia</span></h1>
+<p class="text-sm text-on-surface-variant font-label tracking-wide relative">TRANSFORME SEUS VIDEOS COM DUBLAGEM AUTOMATICA EN -> PT-BR</p>
+</div>
+
+<!-- Upload + Config Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+<!-- Upload Zone -->
+<div class="lg:col-span-2 anim-in anim-in-delay-1">
+<div class="glass rounded-xl overflow-hidden">
+<div id="dropZone" class="flex flex-col items-center justify-center p-6 m-4 border-2 border-dashed border-outline-variant/20 rounded-lg bg-surface-container-lowest/30 cursor-pointer hover:border-primary-dim/40 transition-colors">
+<div id="uploadIcon" class="size-12 bg-surface-container-high rounded-full flex items-center justify-center mb-2 inner-glow">
+<span class="material-symbols-outlined text-primary text-xl">cloud_upload</span>
+</div>
+<h3 class="text-base font-bold mb-0.5" id="uploadTitle">Arraste os videos aqui</h3>
+<p class="text-on-surface-variant text-xs font-label" id="uploadSubtitle">MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios</p>
+<p class="text-primary text-xs font-semibold mt-1 font-label" id="selectFileText">CLIQUE PARA SELECIONAR</p>
+</div>
+<input type="file" id="videoInput" accept=".mp4,.mov,.avi,.mkv,.webm" multiple style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px"/>
+<!-- File list -->
+<div id="fileList" class="hidden px-5 pb-2">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] font-label font-bold text-on-surface-variant uppercase tracking-widest" id="fileCount">0 videos</span>
+<button class="text-[10px] font-label text-error/70 hover:text-error transition-colors" onclick="clearFiles()">Limpar todos</button>
+</div>
+<div id="fileItems" class="space-y-1 max-h-28 overflow-y-auto"></div>
+</div>
+
+<!-- Config Row -->
+<div class="px-5 pb-5 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+<div class="space-y-1.5">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Tradutor</label>
+<div class="flex gap-1">
+<button id="btnOpus" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed" onclick="setTranslator('opus-mt')">Opus-MT</button>
+<button id="btnOllama" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors" onclick="setTranslator('ollama')">Ollama</button>
+</div>
+<p id="translatorHint" class="opt-hint text-[10px] text-on-surface-variant font-label"></p>
+</div>
+<div id="ollamaGroup" class="space-y-1.5 hidden">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Modelo</label>
+<select id="ollamaModel" class="w-full h-8 bg-surface-container-lowest border border-outline-variant/40 rounded px-2 text-xs appearance-none"><option value="llama3.2">Llama 3.2</option><option value="qwen2.5:7b">Qwen 2.5</option></select>
+</div>
+<div class="space-y-1.5">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Motor de Voz</label>
+<div class="flex gap-1">
+<button id="btnQwen" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed" onclick="setTTS('qwen')" title="Clona a voz do video, fala natural (recomendado)">Qwen3</button>
+<button id="btnEdge" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors" onclick="setTTS('edge')">Edge</button>
+</div>
+<p id="ttsHint" class="opt-hint text-[10px] text-on-surface-variant font-label"></p>
+</div>
+<div id="qwenVoiceGroup" class="space-y-1.5">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Voz</label>
+<div class="flex gap-1">
+<select id="qwenVoice" class="w-full h-8 bg-surface-container-lowest border border-outline-variant/40 rounded px-2 text-xs appearance-none flex-1 min-w-0"><option value="">Voz do video</option></select>
+<button class="opt-btn h-8 w-8 flex-shrink-0 rounded bg-surface-container-lowest border border-outline-variant/40 text-primary hover:bg-surface-container-high flex items-center justify-center" onclick="openVoiceModal()" title="Gravar ou enviar uma voz"><span class="material-symbols-outlined" style="font-size:16px">mic</span></button>
+</div>
+<p id="voiceHint" class="opt-hint text-[10px] text-on-surface-variant font-label"></p>
+</div>
+<div id="edgeVoiceGroup" class="space-y-1.5 hidden">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Voz</label>
+<select id="edgeVoice" class="w-full h-8 bg-surface-container-lowest border border-outline-variant/40 rounded px-2 text-xs appearance-none">
+<option value="pt-BR-ThalitaMultilingualNeural">Thalita</option>
+<option value="pt-BR-AntonioNeural">Antonio</option>
+<option value="pt-BR-FranciscaNeural">Francisca</option>
+<option value="pt-PT-DuarteNeural">Duarte</option>
+<option value="pt-PT-RaquelNeural">Raquel</option>
+</select>
+</div>
+<div class="space-y-1.5">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Separar Vocais</label>
+<div class="flex gap-1">
+<button id="btnVocalOn" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed" onclick="setVocal(true)">Sim</button>
+<button id="btnVocalOff" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors" onclick="setVocal(false)">Nao</button>
+</div>
+<p id="vocalHint" class="opt-hint text-[10px] text-on-surface-variant font-label"></p>
+</div>
+</div>
+
+<!-- Start Button -->
+<div class="px-5 pb-5 flex justify-end">
+<button id="startBtn" class="btn-glow flex items-center gap-2 px-7 py-3 bg-primary text-on-primary-fixed rounded-full font-extrabold text-base shadow-[0_0_40px_rgba(0,255,209,0.25)] disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+<span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1,'wght' 400">bolt</span>
+Iniciar Dublagem
+</button>
+</div>
+</div>
+</div>
+
+<!-- Pipeline Status -->
+<div class="lg:col-span-1 anim-in anim-in-delay-2">
+<div class="glass rounded-xl p-4 flex flex-col h-full">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-sm font-bold tracking-tight uppercase font-label flex items-center gap-2">Pipeline <span id="eq" class="eq hidden"><span></span><span></span><span></span><span></span></span></h3>
+<span id="progressPct" class="text-lg font-extrabold text-primary font-headline">0%</span>
+</div>
+<div id="stageList" class="space-y-2 flex-1">
+<div class="flex items-center gap-2.5 opacity-30" data-stage="extract"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Extrair Audio</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="separate"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Separar Vocais</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="transcribe"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Transcrever</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="translate"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Traduzir EN->PT</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="synthesize"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Sintetizar Voz</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="sync"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Sincronizar</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="merge"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Mesclar Video</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+</div>
+<!-- Overall bar -->
+<div class="mt-4 pt-3 border-t border-white/5">
+<div class="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden"><div id="progressBar" class="h-full bg-gradient-to-r from-primary to-tertiary rounded-full shadow-[0_0_10px_rgba(0,255,209,0.4)]" style="width:0%"></div></div>
+<div class="flex justify-between mt-1.5 text-[10px] text-on-surface-variant font-label"><span id="elapsedTime">DECORRIDO: 0s</span><span id="etaTime">PREVISAO: --</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Video Player (hidden until done) -->
+<section id="playerSection" class="mb-6 hidden">
+<div class="flex items-center justify-between mb-3">
+<h2 class="text-lg font-bold tracking-tight">Resultado</h2>
+<div class="flex items-center gap-2.5">
+<span class="text-xs text-on-surface-variant font-label">Legendas</span>
+<div id="subtitleToggle" class="toggle-track active" onclick="toggleSubtitles()"><div class="toggle-knob"></div></div>
+</div>
+</div>
+<div class="glass rounded-xl overflow-hidden">
+<div class="video-wrapper" id="videoWrapper">
+<video id="resultVideo" preload="metadata" onclick="togglePlay()"><track id="subtitleTrack" kind="subtitles" srclang="pt" label="Portugues" default/></video>
+<div id="playOverlay" class="play-overlay" onclick="togglePlay()"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">play_arrow</span></div>
+<div class="video-controls">
+<div class="seek-bar" id="seekBar"><div class="seek-fill" id="seekFill" style="width:0%"></div></div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<button class="ctrl-btn" onclick="skip(-10)" title="Voltar 10s (←)"><span class="material-symbols-outlined" style="font-size:20px">replay_10</span></button>
+<button id="playBtn" class="text-white hover:text-primary transition-colors" onclick="togglePlay()" title="Play/Pause (espaco)"><span class="material-symbols-outlined" style="font-size:26px">play_arrow</span></button>
+<button class="ctrl-btn" onclick="skip(10)" title="Avancar 10s (→)"><span class="material-symbols-outlined" style="font-size:20px">forward_10</span></button>
+<div class="flex items-center gap-1.5 vol-group">
+<button id="muteBtn" class="text-white/60 hover:text-white transition-colors" onclick="toggleMute()"><span class="material-symbols-outlined" style="font-size:18px">volume_up</span></button>
+<input id="volumeSlider" type="range" min="0" max="1" step="0.05" value="1" class="w-0 hover:w-16 transition-all bg-white/15 h-0.5 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full" oninput="setVolume(this.value)"/>
+</div>
+<span id="timeDisplay" class="text-white/40 text-[10px] font-mono font-label ml-1">0:00 / 0:00</span>
+</div>
+<div class="flex items-center gap-3">
+<button id="speedBtn" class="ctrl-btn text-[11px] font-label font-bold w-10" onclick="cycleSpeed()" title="Velocidade (S)">1x</button>
+<button class="ctrl-btn" onclick="toggleSubtitles()" title="Legendas (C)"><span class="material-symbols-outlined" style="font-size:18px">closed_caption</span></button>
+<button id="fullscreenBtn" class="ctrl-btn" onclick="toggleFullscreen()" title="Tela cheia (F)"><span class="material-symbols-outlined" style="font-size:18px">fullscreen</span></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Downloads -->
+<p class="text-[10px] text-on-surface-variant font-label mt-2 flex flex-wrap gap-x-3 gap-y-1">
+<span><kbd>espaco</kbd> play/pause</span><span><kbd>←</kbd><kbd>→</kbd> 10s</span><span><kbd>S</kbd> velocidade</span><span><kbd>C</kbd> legendas</span><span><kbd>F</kbd> tela cheia</span><span><kbd>M</kbd> mudo</span><span>continua de onde voce parou</span>
+</p>
+<div class="grid grid-cols-3 gap-3 mt-3">
+<a id="dlVideo" href="#" download class="glass rounded-lg p-3 text-center hover:border-primary/30 transition-all group"><span class="material-symbols-outlined text-xl text-primary mb-1 group-hover:scale-110 transition-transform">movie</span><p class="text-[11px] font-semibold">Video Dublado</p></a>
+<a id="dlPtSrt" href="#" download class="glass rounded-lg p-3 text-center hover:border-primary/30 transition-all group"><span class="material-symbols-outlined text-xl text-secondary mb-1 group-hover:scale-110 transition-transform">subtitles</span><p class="text-[11px] font-semibold">Legenda PT</p></a>
+<a id="dlEnSrt" href="#" download class="glass rounded-lg p-3 text-center hover:border-tertiary/30 transition-all group"><span class="material-symbols-outlined text-xl text-tertiary mb-1 group-hover:scale-110 transition-transform">description</span><p class="text-[11px] font-semibold">Legenda EN</p></a>
+</div>
+</section>
+</main>
+
+<!-- Right Sidebar: Queue / Downloads -->
+<aside class="w-80 bg-surface-container-low border-l border-white/5 flex flex-col z-30 flex-shrink-0">
+<div class="flex border-b border-white/5 flex-shrink-0">
+<button id="tabQueueBtn" class="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold tracking-widest uppercase font-label text-primary border-b-2 border-primary" onclick="setSidebarTab('queue')">
+Fila <span id="queueCount" class="bg-surface-container-high text-primary px-1.5 py-0.5 rounded text-[10px] font-label inner-glow">0</span>
+</button>
+<button id="tabDownloadsBtn" class="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold tracking-widest uppercase font-label text-on-surface-variant border-b-2 border-transparent hover:text-on-surface transition-colors" onclick="setSidebarTab('downloads')">
+Prontos <span id="downloadsCount" class="bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded text-[10px] font-label">0</span>
+</button>
+</div>
+<div id="queueList" class="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+<div class="text-center py-8 text-on-surface-variant text-xs font-label">Nenhum video na fila</div>
+</div>
+<div id="downloadsPane" class="hidden flex-1 flex flex-col overflow-hidden">
+<div class="p-3 pb-0">
+<div class="flex items-center gap-2 h-8 px-2.5 rounded bg-surface-container-lowest border border-outline-variant/40 focus-within:border-primary-dim/60 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant" style="font-size:15px">search</span>
+<input id="downloadsSearch" type="text" placeholder="Buscar aula..." class="flex-1 bg-transparent text-xs outline-none font-label placeholder:text-on-surface-variant/60"/>
+</div>
+<button id="downloadAllBtn" onclick="downloadAll()" class="btn-glow mt-2 w-full h-9 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-label font-bold flex items-center justify-center gap-1.5 hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed"><span class="material-symbols-outlined" style="font-size:16px">download</span><span id="downloadAllLabel">Baixar todos</span></button>
+</div>
+<div id="downloadsList" class="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+<div class="text-center py-8 text-on-surface-variant text-xs font-label">Nenhum video pronto ainda</div>
+</div>
+</div>
+</aside>
+</div>
+
+<div id="voiceModal" class="hidden fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onclick="if(event.target===this)closeVoiceModal()">
+<div class="glass rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 anim-in" style="background:rgba(22,26,33,.97)">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-base font-bold flex items-center gap-2"><span class="material-symbols-outlined text-primary">record_voice_over</span>Vozes</h3>
+<button class="ctrl-btn" onclick="closeVoiceModal()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<p class="text-xs text-on-surface-variant mb-4">Grave ou envie de 10 a 20 segundos de alguem falando <b class="text-on-surface">em portugues</b>, sem musica nem barulho. A dublagem vai sair com essa voz e com o sotaque dela.</p>
+
+<div class="space-y-1.5 mb-3">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Nome da voz</label>
+<input id="voiceName" type="text" maxlength="40" placeholder="Ex: Minha voz" class="w-full h-9 bg-surface-container-lowest border border-outline-variant/40 rounded px-3 text-sm outline-none focus:border-primary-dim/60"/>
+</div>
+
+<div class="flex gap-1 mb-3">
+<button id="vTabRec" class="opt-btn flex-1 h-8 rounded font-label text-[11px] font-semibold" onclick="setVoiceTab('rec')">Gravar agora</button>
+<button id="vTabFile" class="opt-btn flex-1 h-8 rounded font-label text-[11px] font-semibold" onclick="setVoiceTab('file')">Enviar arquivo</button>
+</div>
+
+<div id="vPaneRec" class="rounded-lg bg-surface-container-lowest/60 border border-outline-variant/20 p-4 mb-3">
+<p class="text-[10px] font-label text-on-surface-variant uppercase tracking-widest mb-1.5">Leia em voz alta, no seu ritmo:</p>
+<p class="text-sm leading-relaxed mb-4 text-on-surface">"Fala, pessoal! Hoje eu vou mostrar como deixar suas imagens com uma cor muito mais bonita. A ideia é simples: primeiro a gente corrige, depois a gente cria o estilo. Fica comigo até o final que vale a pena, beleza?"</p>
+<div class="flex items-center gap-3">
+<button id="recBtn" onclick="toggleRecording()" class="btn-glow flex items-center gap-2 px-4 h-9 rounded-full bg-primary text-on-primary-fixed font-bold text-sm"><span class="material-symbols-outlined" style="font-size:18px">mic</span><span>Gravar</span></button>
+<span id="recTimer" class="font-label text-sm text-on-surface-variant">0:00</span>
+<span id="recDot" class="hidden size-2.5 rounded-full bg-error animate-pulse"></span>
+</div>
+</div>
+
+<div id="vPaneFile" class="hidden rounded-lg bg-surface-container-lowest/60 border border-dashed border-outline-variant/30 p-4 mb-3 text-center cursor-pointer hover:border-primary-dim/40 transition-colors" onclick="document.getElementById('voiceFile').click()">
+<span class="material-symbols-outlined text-primary">upload_file</span>
+<p id="voiceFileLabel" class="text-xs mt-1">Clique para escolher um audio ou video (MP3, WAV, M4A, MP4...)</p>
+<input id="voiceFile" type="file" accept="audio/*,video/*" class="hidden"/>
+</div>
+
+<audio id="voicePreview" controls class="hidden w-full mb-3 h-9"></audio>
+<button id="saveVoiceBtn" onclick="saveVoice()" disabled class="btn-glow w-full h-10 rounded-full bg-primary text-on-primary-fixed font-extrabold text-sm disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"><span class="material-symbols-outlined" style="font-size:18px">save</span>Salvar voz</button>
+
+<div class="mt-5 pt-4 border-t border-white/5">
+<p class="text-[10px] font-label text-on-surface-variant uppercase tracking-widest mb-2">Vozes salvas</p>
+<div id="voiceList" class="space-y-1.5"></div>
+</div>
+</div>
+</div>
+<script>
+// ── STATE ──
+var videoFiles = []; // array of File objects
+var ttsEngine = 'qwen', vocalSeparation = true, translationEngine = 'opus-mt', processing = false;
+var subtitlesEnabled = true, resultFiles = {};
+var activeSessions = {};
+
+// ── UPLOAD ──
+var dropZone = document.getElementById('dropZone');
+var videoInput = document.getElementById('videoInput');
+dropZone.addEventListener('click', function(e){e.preventDefault();e.stopPropagation();videoInput.click()});
+dropZone.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();this.classList.add('drop-over')});
+dropZone.addEventListener('dragleave',function(e){e.preventDefault();e.stopPropagation();this.classList.remove('drop-over')});
+dropZone.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();this.classList.remove('drop-over');if(e.dataTransfer.files&&e.dataTransfer.files.length>0)addFiles(e.dataTransfer.files)});
+videoInput.addEventListener('change',function(){if(this.files&&this.files.length>0)addFiles(this.files);this.value=''});
+
+function addFiles(filesList){
+    for(var i=0;i<filesList.length;i++){
+        var file=filesList[i];
+        var ext=file.name.split('.').pop().toLowerCase();
+        if(['mp4','mov','avi','mkv','webm'].indexOf(ext)===-1){continue}
+        if(file.size>5*1024*1024*1024){continue}
+        // Avoid duplicates
+        var exists=false;
+        for(var j=0;j<videoFiles.length;j++){if(videoFiles[j].name===file.name&&videoFiles[j].size===file.size){exists=true;break}}
+        if(!exists) videoFiles.push(file);
+    }
+    renderFileList();
+}
+
+function removeFile(index){
+    videoFiles.splice(index,1);
+    renderFileList();
+}
+
+function clearFiles(){
+    videoFiles=[];
+    renderFileList();
+}
+
+function renderFileList(){
+    var list=document.getElementById('fileItems');
+    var countEl=document.getElementById('fileCount');
+    var fileListEl=document.getElementById('fileList');
+    var startBtn=document.getElementById('startBtn');
+    countEl.textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'');
+    if(videoFiles.length>0){
+        fileListEl.classList.remove('hidden');
+        startBtn.disabled=false;
+        list.innerHTML='';
+        videoFiles.forEach(function(f,i){
+            var div=document.createElement('div');
+            div.className='flex items-center gap-2 bg-surface-container-low rounded px-2 py-1.5 group';
+            div.innerHTML='<span class="material-symbols-outlined text-primary" style="font-size:14px">movie</span><span class="flex-1 text-[11px] font-label text-on-surface truncate">'+f.name+'</span><span class="text-[10px] font-label text-on-surface-variant">'+(f.size/1024/1024).toFixed(1)+'MB</span><button onclick="removeFile('+i+')" class="text-on-surface-variant hover:text-error transition-colors"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>';
+            list.appendChild(div);
+        });
+        document.getElementById('uploadTitle').textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'')+' selecionado'+(videoFiles.length!==1?'s':'');
+        document.getElementById('uploadSubtitle').textContent='Pronto para dublar';
+        document.getElementById('selectFileText').textContent='ADICIONAR MAIS';
+        var iconEl=document.querySelector('#uploadIcon .material-symbols-outlined');
+        iconEl.textContent='task_alt';iconEl.style.color='#00e9bf';
+        iconEl.classList.remove('uploadIcon-pulse');void iconEl.offsetWidth;iconEl.classList.add('uploadIcon-pulse');
+    }else{
+        fileListEl.classList.add('hidden');
+        startBtn.disabled=true;
+        document.getElementById('uploadTitle').textContent='Arraste os videos aqui';
+        document.getElementById('uploadSubtitle').textContent='MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios';
+        document.getElementById('selectFileText').textContent='CLIQUE PARA SELECIONAR';
+        var iconEl=document.querySelector('#uploadIcon .material-symbols-outlined');
+        iconEl.textContent='cloud_upload';iconEl.style.color='';
+    }
+}
+
+// ── TOGGLES ──
+var OPT_ON='opt-btn flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed shadow-[0_0_14px_rgba(0,255,209,0.25)]';
+var OPT_OFF='opt-btn flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high';
+var HINTS={
+    qwen:'Clona uma voz, fala natural',
+    edge:'Voz pronta da Microsoft, rapido (precisa internet)',
+    'opus-mt':'Rapido, roda na placa',
+    ollama:'IA local, traducao com mais contexto',
+    vocalOn:'Mantem a musica de fundo do video',
+    vocalOff:'Mais rapido, so a voz dublada'
+};
+function setHint(id,text){var el=document.getElementById(id);el.style.opacity=0;setTimeout(function(){el.textContent=text;el.style.opacity=1},120)}
+function loadPrefs(){try{return JSON.parse(localStorage.getItem('dubPrefs')||'{}')}catch(e){return{}}}
+function savePref(k,v){try{var p=loadPrefs();p[k]=v;localStorage.setItem('dubPrefs',JSON.stringify(p))}catch(e){}}
+function setTTS(e){
+    ttsEngine=e;savePref('tts',e);
+    document.getElementById('btnQwen').className=e==='qwen'?OPT_ON:OPT_OFF;
+    document.getElementById('btnEdge').className=e==='edge'?OPT_ON:OPT_OFF;
+    document.getElementById('edgeVoiceGroup').className=e==='edge'?'space-y-1.5':'space-y-1.5 hidden';
+    document.getElementById('qwenVoiceGroup').className=e==='qwen'?'space-y-1.5':'space-y-1.5 hidden';
+    setHint('ttsHint',HINTS[e]);
+}
+function setVocal(v){
+    vocalSeparation=v;savePref('vocal',v);
+    document.getElementById('btnVocalOn').className=v?OPT_ON:OPT_OFF;
+    document.getElementById('btnVocalOff').className=!v?OPT_ON:OPT_OFF;
+    setHint('vocalHint',HINTS[v?'vocalOn':'vocalOff']);
+}
+function setTranslator(e){
+    translationEngine=e;savePref('translator',e);
+    document.getElementById('btnOpus').className=e==='opus-mt'?OPT_ON:OPT_OFF;
+    document.getElementById('btnOllama').className=e==='ollama'?OPT_ON:OPT_OFF;
+    document.getElementById('ollamaGroup').className=e==='ollama'?'space-y-1.5':'space-y-1.5 hidden';
+    setHint('translatorHint',HINTS[e]);
+}
+(function restorePrefs(){
+    var p=loadPrefs();
+    setTTS(p.tts==='edge'?'edge':'qwen');
+    setTranslator(p.translator==='ollama'?'ollama':'opus-mt');
+    setVocal(p.vocal!==false);
+    ['edgeVoice','ollamaModel'].forEach(function(id){
+        var sel=document.getElementById(id);
+        if(p[id])sel.value=p[id];
+        sel.addEventListener('change',function(){savePref(id,sel.value)});
+    });
+})();
+
+// ── VOICES ──
+var voices=[],voiceTab='rec',recorder=null,recChunks=[],recBlob=null,recStart=0,recTimerId=null;
+function updateVoiceHint(){
+    var id=document.getElementById('qwenVoice').value;
+    var v=voices.find(function(x){return x.id===id});
+    setHint('voiceHint',v?('Voz salva \u00b7 '+v.duration+'s'):'Clona o narrador do curso');
+}
+function loadVoices(selectId){
+    return fetch('/api/voices').then(r=>r.json()).then(function(d){
+        voices=d.voices||[];
+        var sel=document.getElementById('qwenVoice');
+        var want=selectId!==undefined?selectId:(loadPrefs().voice||sel.value);
+        sel.innerHTML='<option value="">Voz do video</option>'+voices.map(function(v){return '<option value="'+v.id+'"></option>'}).join('');
+        voices.forEach(function(v,i){sel.options[i+1].textContent=v.name});
+        sel.value=voices.some(function(v){return v.id===want})?want:'';
+        updateVoiceHint();renderVoiceList();
+    }).catch(function(){});
+}
+document.getElementById('qwenVoice').addEventListener('change',function(){savePref('voice',this.value);updateVoiceHint()});
+function renderVoiceList(){
+    var list=document.getElementById('voiceList');
+    if(!voices.length){list.innerHTML='<p class="text-xs text-on-surface-variant">Nenhuma voz salva ainda.</p>';return}
+    list.innerHTML='';
+    voices.forEach(function(v){
+        var row=document.createElement('div');
+        row.className='flex items-center gap-2 bg-surface-container-low rounded-lg px-3 py-2';
+        row.innerHTML='<button class="ctrl-btn text-primary" title="Ouvir"><span class="material-symbols-outlined" style="font-size:20px">play_circle</span></button>'+
+            '<div class="flex-1 min-w-0"><p class="text-xs font-semibold truncate"></p><p class="text-[10px] text-on-surface-variant truncate"></p></div>'+
+            '<span class="text-[10px] font-label text-on-surface-variant">'+v.duration+'s</span>'+
+            '<button class="ctrl-btn hover:!text-error" title="Apagar"><span class="material-symbols-outlined" style="font-size:16px">delete</span></button>';
+        row.querySelector('p').textContent=v.name;
+        row.querySelectorAll('p')[1].textContent='"'+v.text+'"';
+        var btns=row.querySelectorAll('button');
+        btns[0].onclick=function(){var a=new Audio(v.audio_url);a.play()};
+        btns[1].onclick=function(){
+            if(!confirm('Apagar a voz "'+v.name+'"?'))return;
+            fetch('/api/voices/'+v.id,{method:'DELETE'}).then(function(){toast('Voz apagada','info');loadVoices()});
+        };
+        list.appendChild(row);
+    });
+}
+function openVoiceModal(){
+    document.getElementById('voiceModal').classList.remove('hidden');
+    setVoiceTab(voiceTab);loadVoices();
+    setTimeout(function(){document.getElementById('voiceName').focus()},50);
+}
+function closeVoiceModal(){
+    if(recorder&&recorder.state==='recording')toggleRecording();
+    document.getElementById('voiceModal').classList.add('hidden');
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!document.getElementById('voiceModal').classList.contains('hidden'))closeVoiceModal()});
+function setVoiceTab(t){
+    voiceTab=t;
+    document.getElementById('vTabRec').className=t==='rec'?OPT_ON:OPT_OFF;
+    document.getElementById('vTabFile').className=t==='file'?OPT_ON:OPT_OFF;
+    document.getElementById('vPaneRec').classList.toggle('hidden',t!=='rec');
+    document.getElementById('vPaneFile').classList.toggle('hidden',t!=='file');
+}
+function setVoiceAudio(blob){
+    recBlob=blob;
+    var pv=document.getElementById('voicePreview');
+    if(blob){pv.src=URL.createObjectURL(blob);pv.classList.remove('hidden')}else{pv.classList.add('hidden')}
+    document.getElementById('saveVoiceBtn').disabled=!blob;
+}
+document.getElementById('voiceFile').addEventListener('change',function(){
+    var f=this.files&&this.files[0];if(!f)return;
+    document.getElementById('voiceFileLabel').textContent=f.name;
+    if(!document.getElementById('voiceName').value)document.getElementById('voiceName').value=f.name.replace(/\.[^.]+$/,'').slice(0,40);
+    setVoiceAudio(f);
+});
+async function toggleRecording(){
+    var btn=document.getElementById('recBtn');
+    if(recorder&&recorder.state==='recording'){recorder.stop();return}
+    try{
+        var stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    }catch(e){toast('Nao consegui acessar o microfone','err');return}
+    recChunks=[];recorder=new MediaRecorder(stream);
+    recorder.ondataavailable=function(e){if(e.data.size)recChunks.push(e.data)};
+    recorder.onstop=function(){
+        stream.getTracks().forEach(function(t){t.stop()});
+        clearInterval(recTimerId);
+        document.getElementById('recDot').classList.add('hidden');
+        btn.lastChild.textContent='Gravar de novo';
+        setVoiceAudio(new Blob(recChunks,{type:recorder.mimeType||'audio/webm'}));
+    };
+    recorder.start();recStart=Date.now();setVoiceAudio(null);
+    btn.lastChild.textContent='Parar';
+    document.getElementById('recDot').classList.remove('hidden');
+    recTimerId=setInterval(function(){
+        var s=(Date.now()-recStart)/1000;
+        document.getElementById('recTimer').textContent=fmtTime(s);
+        if(s>=25)recorder.stop();  // longer than the 20s the server keeps anyway
+    },200);
+}
+async function saveVoice(){
+    if(!recBlob)return;
+    var btn=document.getElementById('saveVoiceBtn');
+    btn.disabled=true;btn.innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> Ouvindo e transcrevendo...';
+    var fd=new FormData();
+    var ext=recBlob.name?'':(recBlob.type.indexOf('ogg')!==-1?'.ogg':recBlob.type.indexOf('mp4')!==-1?'.m4a':'.webm');
+    fd.append('audio',recBlob,recBlob.name||('gravacao'+ext));
+    fd.append('name',document.getElementById('voiceName').value.trim()||'Minha voz');
+    try{
+        var r=await fetch('/api/voices',{method:'POST',body:fd});var d=await r.json();
+        if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status));
+        toast('Voz "'+d.name+'" salva e selecionada','ok');
+        savePref('voice',d.id);
+        document.getElementById('voiceName').value='';document.getElementById('voiceFileLabel').textContent='Clique para escolher um audio ou video (MP3, WAV, M4A, MP4...)';
+        document.getElementById('recTimer').textContent='0:00';document.getElementById('recBtn').lastChild.textContent='Gravar';
+        setVoiceAudio(null);
+        await loadVoices(d.id);
+    }catch(e){toast(e.message,'err')}
+    btn.disabled=!recBlob;btn.innerHTML='<span class="material-symbols-outlined" style="font-size:18px">save</span>Salvar voz';
+}
+loadVoices();
+
+// ── TOASTS / CELEBRATION ──
+function toast(msg,kind){
+    var icon={ok:'check_circle',err:'error',info:'info'}[kind||'info'];
+    var color={ok:'#00e9bf',err:'#ff716c',info:'#67d7ff'}[kind||'info'];
+    var el=document.createElement('div');el.className='toast';
+    el.innerHTML='<span class="material-symbols-outlined" style="font-size:16px;color:'+color+'">'+icon+'</span><span></span>';
+    el.lastChild.textContent=msg;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(function(){el.classList.add('out');setTimeout(function(){el.remove()},300)},kind==='err'?7000:4000);
+}
+function confettiBurst(){
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+    var colors=['#00e9bf','#67d7ff','#ac8aff','#b9ffe8'];
+    for(var i=0;i<60;i++){
+        var c=document.createElement('div');c.className='confetti';
+        c.style.left=Math.random()*100+'vw';c.style.background=colors[i%colors.length];
+        c.style.animationDuration=(1.8+Math.random()*1.6)+'s';c.style.animationDelay=(Math.random()*.4)+'s';
+        document.body.appendChild(c);setTimeout(function(x){x.remove()},3800,c);
+    }
+}
+function chime(){
+    try{
+        var ctx=new (window.AudioContext||window.webkitAudioContext)();
+        [660,880,1320].forEach(function(f,i){
+            var o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f;o.type='sine';
+            o.connect(g);g.connect(ctx.destination);var t=ctx.currentTime+i*.12;
+            g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.12,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.35);
+            o.start(t);o.stop(t+.4);
+        });
+    }catch(e){}
+}
+function notifyDone(name){
+    chime();confettiBurst();toast('Dublagem pronta: '+name,'ok');
+    try{if('Notification' in window&&Notification.permission==='granted'&&document.hidden)new Notification('Dublagem pronta',{body:name})}catch(e){}
+}
+
+// ── STAGE UPDATES ──
+function updateStage(stage,status,stageFrac){
+    var el=document.querySelector('[data-stage="'+stage+'"]');if(!el)return;
+    var icon=el.querySelector('.material-symbols-outlined'),pct=el.querySelector('.stage-pct'),bar=el.querySelector('.stage-bar'),barFill=bar?bar.querySelector('div'):null;
+    el.style.opacity='1';
+    el.classList.remove('stage-pop');void el.offsetWidth;el.classList.add('stage-pop');
+    if(status==='done'){icon.textContent='check_circle';icon.style.fontVariationSettings="'FILL' 1";icon.className='material-symbols-outlined';icon.style.color='#00e9bf';if(pct){pct.textContent='100%';pct.classList.remove('hidden');pct.style.color=''}if(bar)bar.classList.remove('hidden');if(barFill)barFill.style.width='100%'}
+    else if(status==='running'){icon.textContent='progress_activity';icon.className='material-symbols-outlined animate-spin';icon.style.color='#00bdeb';icon.style.fontVariationSettings='';if(pct)pct.classList.remove('hidden');if(bar)bar.classList.remove('hidden');if(stageFrac!==undefined&&pct)pct.textContent=Math.round(stageFrac*100)+'%';if(stageFrac!==undefined&&barFill)barFill.style.width=(stageFrac*100)+'%';document.getElementById('progressBar').classList.add('progress-active');document.getElementById('eq').classList.remove('hidden')}
+    else if(status==='error'){icon.textContent='cancel';icon.style.fontVariationSettings="'FILL' 1";icon.className='material-symbols-outlined';icon.style.color='#ff716c';if(pct){pct.textContent='ERRO';pct.classList.remove('hidden');pct.style.color='#ff716c'}document.getElementById('progressBar').classList.remove('progress-active');document.getElementById('eq').classList.add('hidden')}
+    else{icon.textContent='radio_button_unchecked';icon.className='material-symbols-outlined text-on-surface-variant';icon.style.color='';icon.style.fontVariationSettings='';el.style.opacity='0.3';if(pct)pct.classList.add('hidden');if(bar)bar.classList.add('hidden')}
+}
+function resetPipelineUI(){
+    document.querySelectorAll('[data-stage]').forEach(function(el){updateStage(el.getAttribute('data-stage'),'pending')});
+    document.getElementById('progressPct').textContent='0%';
+    document.getElementById('progressBar').style.width='0%';
+    document.getElementById('progressBar').classList.remove('progress-active');
+    document.getElementById('eq').classList.add('hidden');
+    document.getElementById('elapsedTime').textContent='DECORRIDO: 0s';
+    document.getElementById('etaTime').textContent='PREVISAO: --';
+}
+function fmt(s){return s<60?Math.round(s)+'s':Math.floor(s/60)+'m'+Math.round(s%60)+'s'}
+function fmtTime(sec){var m=Math.floor(sec/60),s=Math.floor(sec%60);return m+':'+(s<10?'0':'')+s}
+
+// ── QUEUE UI ──
+var lastQueueKey='',handledSessions={};
+function sessionFinished(sid,pid,ok,err){
+    // Called from SSE and from polling; whichever sees the end first wins.
+    if(!activeSessions[sid]||handledSessions[sid])return;
+    handledSessions[sid]=true;
+    var name=activeSessions[sid].filename||'video';
+    document.getElementById('progressBar').classList.remove('progress-active');
+    document.getElementById('eq').classList.add('hidden');
+    if(ok){
+        setHeaderStatus('Concluido!','#00e9bf','rgba(0,233,191,0.1)');
+        notifyDone(name);loadResults(pid);
+    }else{
+        setHeaderStatus('Erro','#ff716c','rgba(159,5,25,0.3)');
+        toast(name+': '+(err||'falhou'),'err');
+    }
+    renderDownloads();
+}
+function renderQueue(){
+    fetch('/api/jobs').then(r=>r.json()).then(data=>{
+        var jobs=data.jobs||[];
+        jobs.forEach(function(j){if(j.status==='done')sessionFinished(j.session_id,j.project_id,j.result==='ok',j.error)});
+        var key=JSON.stringify(jobs.map(function(j){return [j.id,j.status,j.result,Math.round((j.progress||0)*100),j.stage]}));
+        if(key===lastQueueKey)return;
+        lastQueueKey=key;
+        var list=document.getElementById('queueList');
+        document.getElementById('queueCount').textContent=jobs.filter(j=>j.status!=='done').length;
+        if(!jobs.length){list.innerHTML='<div class="text-center py-8 text-on-surface-variant text-xs font-label">Nenhum video na fila</div>';return}
+        list.innerHTML='';
+        jobs.forEach(function(j){
+            var pct=Math.round((j.progress||0)*100);
+            var div=document.createElement('div');
+            if(j.status==='running'){
+                div.className='queue-item bg-surface-container-high rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined animate-spin text-primary" style="font-size:14px">progress_activity</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-primary px-1 py-0.5 rounded bg-primary/10">'+(j.stage||'Processando')+'</span><span class="text-[9px] font-label text-primary neon-glow">'+pct+'%</span></div><div class="w-full h-0.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary rounded-full shimmer" style="width:'+pct+'%"></div></div>';
+            } else if(j.status==='queued'){
+                var pos=0;
+                jobs.forEach(function(jj){if(jj.status==='running')pos++});
+                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-on-surface-variant/30 opacity-60';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-on-surface-variant" style="font-size:14px">schedule</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-on-surface-variant px-1 py-0.5 rounded bg-surface-container">NA FILA</span><span class="text-[9px] font-label text-on-surface-variant">Aguardando...</span></div>';
+            } else if(j.status==='done'&&j.result==='ok'){
+                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-secondary cursor-pointer hover:border-secondary/60 transition-all';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-secondary" style="font-size:14px">check_circle</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-secondary px-1 py-0.5 rounded bg-secondary/10 flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:10px">play_circle</span> ASSISTIR</span><span class="text-[9px] font-label text-secondary">100%</span></div>';
+                div.onclick=function(){loadResults(j.project_id)};
+            } else {
+                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-error opacity-50';
+                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-1.5 border-l-2 border-l-error';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-error" style="font-size:14px">error</span></div><span class="text-[9px] font-label text-error/80" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"></span>';
+                div.lastChild.textContent='FALHOU: '+(j.error||'erro desconhecido');
+            }
+            list.appendChild(div);
+        });
+    }).catch(function(){});
+}
+
+// ── SIDEBAR TABS / DOWNLOADS ──
+var sidebarTab='queue';
+function setSidebarTab(tab){
+    sidebarTab=tab;
+    var activeCls='flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold tracking-widest uppercase font-label text-primary border-b-2 border-primary';
+    var inactiveCls='flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold tracking-widest uppercase font-label text-on-surface-variant border-b-2 border-transparent hover:text-on-surface transition-colors';
+    document.getElementById('tabQueueBtn').className=tab==='queue'?activeCls:inactiveCls;
+    document.getElementById('tabDownloadsBtn').className=tab==='downloads'?activeCls:inactiveCls;
+    document.getElementById('queueList').classList.toggle('hidden',tab!=='queue');
+    document.getElementById('downloadsPane').classList.toggle('hidden',tab!=='downloads');
+    if(tab==='downloads')renderDownloads();
+}
+function fmtSize(mb){return mb>=1024?(mb/1024).toFixed(1)+' GB':mb.toFixed(1)+' MB'}
+function fmtDate(ts){
+    var d=new Date(ts*1000),now=new Date();
+    var sameDay=d.toDateString()===now.toDateString();
+    var hh=d.getHours().toString().padStart(2,'0'),mm=d.getMinutes().toString().padStart(2,'0');
+    return sameDay?('Hoje '+hh+':'+mm):(d.getDate().toString().padStart(2,'0')+'/'+(d.getMonth()+1).toString().padStart(2,'0')+' '+hh+':'+mm);
+}
+var lastDownloadsKey='',allDownloads=[],shownDownloads=[];
+function downloadAll(){
+    if(!shownDownloads.length)return;
+    var ids=shownDownloads.map(function(v){return v.project_id}).join(',');
+    toast('Preparando o .zip com '+shownDownloads.length+' videos...','info');
+    var a=document.createElement('a');a.href='/api/downloads/zip?ids='+encodeURIComponent(ids);a.click();
+}
+document.getElementById('downloadsSearch').addEventListener('input',function(){lastDownloadsKey='';drawDownloads()});
+function renderDownloads(){
+    fetch('/api/downloads').then(r=>r.json()).then(data=>{
+        allDownloads=data.videos||[];
+        document.getElementById('downloadsCount').textContent=allDownloads.length;
+        drawDownloads();
+    }).catch(function(){});
+}
+function drawDownloads(){
+    {
+        var q=document.getElementById('downloadsSearch').value.trim().toLowerCase();
+        var videos=allDownloads.filter(function(v){return !q||v.filename.toLowerCase().indexOf(q)!==-1});
+        var key=q+'|'+JSON.stringify(videos.map(function(v){return [v.project_id,v.modified]}));
+        if(key===lastDownloadsKey)return;
+        lastDownloadsKey=key;
+        var list=document.getElementById('downloadsList');
+        shownDownloads=videos;
+        var totalMb=videos.reduce(function(a,v){return a+v.size_mb},0);
+        document.getElementById('downloadAllLabel').textContent=q?('Baixar '+videos.length+' encontrados \u00b7 '+fmtSize(totalMb)):('Baixar todos ('+videos.length+') \u00b7 '+fmtSize(totalMb));
+        document.getElementById('downloadAllBtn').disabled=!videos.length;
+        if(!videos.length){list.innerHTML='<div class="text-center py-8 text-on-surface-variant text-xs font-label">'+(q?'Nada encontrado':'Nenhum video pronto ainda')+'</div>';return}
+        list.innerHTML='';
+        videos.forEach(function(v){
+            var div=document.createElement('div');
+            div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary/50 hover:border-primary transition-all';
+            div.innerHTML=
+                '<div class="flex justify-between items-start gap-2">'+
+                    '<span class="text-[11px] font-label text-on-surface leading-tight cursor-pointer hover:text-primary transition-colors" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="'+v.filename+'">'+v.filename.replace('_dublado_pt.mp4','')+'</span>'+
+                '</div>'+
+                '<div class="flex justify-between items-center">'+
+                    '<span class="text-[9px] font-label text-on-surface-variant">'+fmtSize(v.size_mb)+' &middot; '+fmtDate(v.modified)+'</span>'+
+                '</div>'+
+                '<div class="flex items-center gap-2 mt-1">'+
+                    '<button class="flex-1 flex items-center justify-center gap-1 h-7 rounded bg-primary/10 text-primary text-[10px] font-label font-semibold hover:bg-primary/20 transition-colors"><span class="material-symbols-outlined" style="font-size:13px">play_circle</span> ASSISTIR</button>'+
+                    '<a href="'+v.download_url+'" class="flex items-center justify-center h-7 w-7 rounded bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors" title="Baixar"><span class="material-symbols-outlined" style="font-size:15px">download</span></a>'+
+                    '<button class="flex items-center justify-center h-7 w-7 rounded bg-surface-container-high text-on-surface-variant hover:text-error transition-colors" title="Excluir"><span class="material-symbols-outlined" style="font-size:15px">delete</span></button>'+
+                '</div>';
+            div.querySelector('.cursor-pointer').onclick=function(){loadResults(v.project_id)};
+            div.querySelector('button.flex-1').onclick=function(){loadResults(v.project_id)};
+            div.querySelectorAll('button')[1].onclick=function(){
+                if(!confirm('Excluir "'+v.filename+'"? O video dublado sera apagado (o original enviado continua salvo).'))return;
+                fetch('/api/downloads/'+v.project_id,{method:'DELETE'}).then(function(){toast('Video excluido','info');renderDownloads()});
+            };
+            list.appendChild(div);
+        });
+    }
+}
+
+// ── CHUNKED UPLOAD ──
+async function uploadInChunks(file, fileIdx, totalFiles){
+    var CHUNK=10*1024*1024; // 10 MB per chunk
+    var PARALLEL=4;         // 4 simultaneous uploads
+    var MAX_RETRY=3;
+    var total=Math.ceil(file.size/CHUNK);
+    var projectId=null;
+    var completed=0;
+
+    function updateBtn(){
+        var pct=Math.round(completed/total*100);
+        document.getElementById('startBtn').innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> '+(fileIdx+1)+'/'+totalFiles+' — '+pct+'%';
+    }
+
+    async function sendChunk(i,pid){
+        var chunk=file.slice(i*CHUNK,Math.min((i+1)*CHUNK,file.size));
+        var fd=new FormData();
+        fd.append('chunk',chunk,file.name);
+        fd.append('chunk_index',i);
+        fd.append('total_chunks',total);
+        fd.append('filename',file.name);
+        if(pid)fd.append('project_id',pid);
+        for(var attempt=0;attempt<MAX_RETRY;attempt++){
+            try{
+                var resp=await fetch('/api/upload/chunk',{method:'POST',body:fd});
+                if(!resp.ok){var t=await resp.text();throw new Error('HTTP '+resp.status+': '+t)}
+                var data=await resp.json();
+                if(data.error)throw new Error(data.error);
+                return data;
+            }catch(e){
+                if(attempt===MAX_RETRY-1)throw e;
+                await new Promise(function(r){setTimeout(r,1000*(attempt+1));});
+            }
+        }
+    }
+
+    // Chunk 0 first — establishes project_id
+    var d0=await sendChunk(0,null);
+    projectId=d0.project_id;
+    completed=1;
+    var assembled=!!d0.complete;
+    updateBtn();
+
+    // Remaining chunks in parallel batches
+    for(var batch=1;batch<total;batch+=PARALLEL){
+        var indices=[];
+        for(var j=batch;j<Math.min(batch+PARALLEL,total);j++)indices.push(j);
+        await Promise.all(indices.map(function(idx){
+            return sendChunk(idx,projectId).then(function(d){if(d.complete)assembled=true;completed++;updateBtn();});
+        }));
+    }
+
+    // Every chunk returned OK but the server never reported the file as assembled —
+    // some chunk was lost server-side. Don't start a job on an empty project.
+    if(!assembled)return{error:'Upload incompleto: o servidor nao montou o arquivo. Reenvie o video.'};
+
+    return{project_id:projectId,filename:file.name};
+}
+
+// ── START PIPELINE ──
+document.getElementById('startBtn').addEventListener('click',async function(){
+    if(!videoFiles.length){toast('Selecione pelo menos um video','err');return}
+    try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission()}catch(e){}
+    var btn=this;
+    var filesToSend=[...videoFiles];
+    // Clear file list immediately
+    videoFiles=[];
+    renderFileList();
+
+    btn.disabled=true;
+    btn.innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> Enviando...';
+    setHeaderStatus('Enviando...','#00bdeb','rgba(0,189,235,0.1)');
+
+    for(var i=0;i<filesToSend.length;i++){
+        var file=filesToSend[i];
+        try{
+            var up=await uploadInChunks(file,i,filesToSend.length);
+            if(!up||up.error){console.error('Upload error:',up&&up.error);toast(file.name+': '+((up&&up.error)||'falha no upload'),'err');continue}
+            var pid=up.project_id;
+            var sid=pid+'-'+Date.now()+'-'+i;
+
+            var startData=await(await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+                project_id:pid,session_id:sid,filename:file.name,
+                tts_engine:ttsEngine,translation_engine:translationEngine,
+                ollama_model:document.getElementById('ollamaModel').value,
+                edge_voice:document.getElementById('edgeVoice').value,vocal_separation:vocalSeparation,
+                voice_id:ttsEngine==='qwen'?document.getElementById('qwenVoice').value:''
+            })})).json();
+            if(startData.error){console.error('Start error:',startData.error);toast(file.name+': '+startData.error,'err');continue}
+
+            activeSessions[sid]={projectId:pid,filename:file.name};
+            listenSSE(sid);
+            toast(file.name+' enviado para a fila','info');
+        }catch(e){
+            console.error('Error sending file:',file.name,e);
+            toast(file.name+': erro ao enviar','err');
+        }
+    }
+
+    renderQueue();
+    setHeaderStatus('Na fila','#00bdeb','rgba(0,189,235,0.1)');
+    btn.disabled=false;
+    btn.innerHTML='<span class="material-symbols-outlined" style="font-variation-settings:\'FILL\' 1,\'wght\' 400">bolt</span> Iniciar Dublagem';
+});
+
+function setHeaderStatus(text,color,bg){
+    var el=document.getElementById('headerStatus');
+    el.textContent=text;el.style.color=color;el.style.background=bg;
+}
+
+// ── SSE ──
+function listenSSE(sid){
+    var es=new EventSource('/api/events/'+sid);
+    es.addEventListener('queue',function(e){var d=JSON.parse(e.data);setHeaderStatus('Fila: posicao '+d.position,'#00bdeb','rgba(0,189,235,0.1)');renderQueue()});
+    es.addEventListener('queue_start',function(e){resetPipelineUI();setHeaderStatus('Processando','#00bdeb','rgba(0,189,235,0.1)');renderQueue()});
+    es.addEventListener('stage_start',function(e){
+        var d=JSON.parse(e.data);
+        // "extract" is always the first stage of a job — this is the reliable signal
+        // that THIS job just became the one actually running, as opposed to still
+        // sitting queued. Reset the panel here so stale checkmarks from whichever
+        // video finished right before this one don't linger on stages this job
+        // hasn't reached yet.
+        if(d.stage==='extract')resetPipelineUI();
+        updateStage(d.stage,'running',0);renderQueue()
+    });
+    es.addEventListener('progress',function(e){
+        var d=JSON.parse(e.data);var p=Math.round(d.frac*100);
+        document.getElementById('progressPct').textContent=p+'%';
+        document.getElementById('progressBar').style.width=p+'%';
+        if(d.elapsed)document.getElementById('elapsedTime').textContent='DECORRIDO: '+fmt(d.elapsed);
+        if(d.eta&&d.eta>0)document.getElementById('etaTime').textContent='PREVISAO: '+fmt(d.eta);
+        if(d.stage&&d.stage_frac!==undefined)updateStage(d.stage,'running',d.stage_frac);
+        renderQueue();
+    });
+    es.addEventListener('stage_done',function(e){var d=JSON.parse(e.data);updateStage(d.stage,'done');renderQueue()});
+    es.addEventListener('stage_error',function(e){var d=JSON.parse(e.data);updateStage(d.stage,'error');es.close();sessionFinished(sid,(activeSessions[sid]||{}).projectId,false,d.display+': '+(d.error||''));renderQueue()});
+    es.addEventListener('job_error',function(e){var d=JSON.parse(e.data);es.close();sessionFinished(sid,(activeSessions[sid]||{}).projectId,false,d.message);renderQueue()});
+    es.addEventListener('gone',function(){es.close();renderQueue()});
+    es.addEventListener('done',async function(e){
+        var d=JSON.parse(e.data);
+        document.getElementById('progressPct').textContent='100%';
+        document.getElementById('progressBar').style.width='100%';
+        document.getElementById('elapsedTime').textContent='TOTAL: '+fmt(d.total_time);
+        es.close();
+        sessionFinished(sid,d.project_id||(activeSessions[sid]||{}).projectId,true);
+        renderQueue();
+    });
+    es.addEventListener('error',function(){if(es.readyState===EventSource.CLOSED)renderQueue();else setHeaderStatus('Reconectando...','#ffb86b','rgba(255,184,107,0.1)')});
+}
+
+// ── LOAD RESULTS ──
+async function loadResults(pid){
+    try{
+        var data=await(await fetch('/api/result/'+pid)).json();
+        resultFiles=data.files||{};
+        currentPid=pid;
+        var playerSection=document.getElementById('playerSection');
+        playerSection.classList.remove('hidden');
+        playerSection.classList.remove('anim-in');void playerSection.offsetWidth;playerSection.classList.add('anim-in');
+        var videoEl=document.getElementById('resultVideo');
+        if(resultFiles.video)videoEl.src=resultFiles.video;
+        var track=document.getElementById('subtitleTrack');
+        if(resultFiles.pt_vtt){track.src=resultFiles.pt_vtt;track.mode=subtitlesEnabled?'showing':'hidden'}
+        if(resultFiles.video)document.getElementById('dlVideo').href=resultFiles.video+'?download=1';
+        if(resultFiles.pt_srt)document.getElementById('dlPtSrt').href=resultFiles.pt_srt;
+        if(resultFiles.en_srt)document.getElementById('dlEnSrt').href=resultFiles.en_srt;
+        setupVideoPlayer(videoEl);
+        document.getElementById('playerSection').scrollIntoView({behavior:'smooth'});
+    }catch(e){console.error('Error loading results:',e)}
+}
+
+// ── VIDEO PLAYER ──
+var playerReady=false,currentPid=null,lastSave=0;
+var SPEEDS=[1,1.25,1.5,1.75,2];
+function posKey(){return 'dubPos:'+currentPid}
+function setupVideoPlayer(v){
+    if(playerReady)return;playerReady=true;
+    var overlay=document.getElementById('playOverlay');
+    v.addEventListener('play',function(){document.querySelector('#playBtn .material-symbols-outlined').textContent='pause';overlay.classList.add('gone')});
+    v.addEventListener('pause',function(){document.querySelector('#playBtn .material-symbols-outlined').textContent='play_arrow';overlay.classList.remove('gone')});
+    v.addEventListener('timeupdate',function(){
+        var pct=v.duration?(v.currentTime/v.duration*100):0;
+        document.getElementById('seekFill').style.width=pct+'%';
+        document.getElementById('timeDisplay').textContent=fmtTime(v.currentTime)+' / '+fmtTime(v.duration||0);
+        if(currentPid&&Date.now()-lastSave>3000){lastSave=Date.now();try{localStorage.setItem(posKey(),v.currentTime>v.duration-5?0:v.currentTime)}catch(e){}}
+    });
+    v.addEventListener('loadedmetadata',function(){
+        var t=0;try{t=parseFloat(localStorage.getItem(posKey())||0)}catch(e){}
+        if(t>5&&t<v.duration-5){v.currentTime=t;toast('Continuando de '+fmtTime(t),'info')}
+        v.playbackRate=parseFloat(loadPrefs().speed||1);updateSpeedBtn();
+    });
+    document.getElementById('seekBar').addEventListener('click',function(e){var rect=this.getBoundingClientRect();v.currentTime=((e.clientX-rect.left)/rect.width)*v.duration});
+    v.volume=1;
+}
+function updateSpeedBtn(){document.getElementById('speedBtn').textContent=document.getElementById('resultVideo').playbackRate+'x'}
+function cycleSpeed(){
+    var v=document.getElementById('resultVideo');
+    var i=SPEEDS.indexOf(v.playbackRate);v.playbackRate=SPEEDS[(i+1)%SPEEDS.length];
+    savePref('speed',v.playbackRate);updateSpeedBtn();toast('Velocidade '+v.playbackRate+'x','info');
+}
+function skip(sec){var v=document.getElementById('resultVideo');if(v.duration)v.currentTime=Math.max(0,Math.min(v.duration,v.currentTime+sec))}
+document.addEventListener('keydown',function(e){
+    if(document.getElementById('playerSection').classList.contains('hidden'))return;
+    var tag=(e.target.tagName||'').toLowerCase();if(tag==='input'||tag==='select'||tag==='textarea')return;
+    var k=e.key.toLowerCase();
+    if(k===' '||k==='k'){e.preventDefault();togglePlay()}
+    else if(k==='arrowleft'){e.preventDefault();skip(-10)}
+    else if(k==='arrowright'){e.preventDefault();skip(10)}
+    else if(k==='s')cycleSpeed();
+    else if(k==='c')toggleSubtitles();
+    else if(k==='f')toggleFullscreen();
+    else if(k==='m')toggleMute();
+});
+function togglePlay(){var v=document.getElementById('resultVideo');if(v.paused)v.play();else v.pause()}
+function toggleMute(){var v=document.getElementById('resultVideo');v.muted=!v.muted;document.querySelector('#muteBtn .material-symbols-outlined').textContent=v.muted?'volume_off':'volume_up'}
+function setVolume(val){document.getElementById('resultVideo').volume=val;document.querySelector('#muteBtn .material-symbols-outlined').textContent=val==0?'volume_off':'volume_up'}
+function toggleFullscreen(){var w=document.getElementById('videoWrapper');if(document.fullscreenElement)document.exitFullscreen();else w.requestFullscreen()}
+function toggleSubtitles(){
+    subtitlesEnabled=!subtitlesEnabled;
+    var toggle=document.getElementById('subtitleToggle'),track=document.getElementById('subtitleTrack');
+    if(subtitlesEnabled){toggle.classList.add('active');if(track.src)track.mode='showing'}
+    else{toggle.classList.remove('active');if(track.src)track.mode='hidden'}
+}
+
+// ── GPU WIDGET ──
+function pollGpu(){
+    fetch('/api/gpu').then(r=>r.json()).then(function(g){
+        if(!g.ok){document.getElementById('gpuText').textContent='offline';document.getElementById('gpuDot').style.background='#ff716c';return}
+        var pct=Math.round(g.used_mb/g.total_mb*100);
+        document.getElementById('gpuName').textContent=g.name;
+        var bar=document.getElementById('gpuBar');bar.style.width=pct+'%';
+        bar.style.background=pct>90?'#ff716c':pct>75?'linear-gradient(90deg,#ffb86b,#ff716c)':'';
+        document.getElementById('gpuText').textContent=(g.used_mb/1024).toFixed(1)+'/'+(g.total_mb/1024).toFixed(0)+'GB · '+g.temp_c+'°C';
+        document.getElementById('gpuWidget').title='Uso da placa: '+g.util+'% · VRAM '+pct+'%';
+        document.getElementById('gpuDot').style.background='';
+    }).catch(function(){document.getElementById('gpuText').textContent='offline'});
+}
+setInterval(pollGpu,3000);pollGpu();
+
+// ── QUEUE POLL ──
+setInterval(renderQueue,3000);
+setInterval(renderDownloads,5000);
+renderQueue();renderDownloads();
+</script>
+<div id="toasts"></div>
+</body>
+</html>
