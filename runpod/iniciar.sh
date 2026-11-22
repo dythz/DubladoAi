@@ -4,6 +4,8 @@
 #
 #  Um comando so: instala (so na primeira vez), baixa os modelos e liga
 #  o servidor em segundo plano. Funciona em qualquer GPU NVIDIA.
+#  Pod com varias placas: liga um servidor por placa (portas 5000, 5001...),
+#  cada um com a propria fila. DUB_GPUS=1 forca usar so a primeira.
 #
 #    bash runpod/iniciar.sh            instala (se precisar) e liga
 #    bash runpod/iniciar.sh status     mostra GPU, servidor e link
@@ -17,9 +19,20 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WS="${LUMINADUB_WORKSPACE:-/workspace}"
 [ -d "$WS" ] || WS="$APP_DIR"
 VENV="$WS/venv-luminadub"
-LOG="$WS/luminadub.log"
-PIDFILE="$WS/luminadub.pid"
-PORT=5000
+BASE_PORT=5000
+
+# Quantas placas usar: todas do pod (ou DUB_GPUS).
+gpu_count() {
+  local n=0
+  command -v nvidia-smi >/dev/null 2>&1 && n="$(nvidia-smi -L 2>/dev/null | grep -c '^GPU' || true)"
+  [ "${n:-0}" -ge 1 ] || n=1
+  if [ -n "${DUB_GPUS:-}" ] && [ "$DUB_GPUS" -ge 1 ] 2>/dev/null && [ "$DUB_GPUS" -lt "$n" ]; then n="$DUB_GPUS"; fi
+  echo "$n"
+}
+NGPU="$(gpu_count)"
+log_of()  { echo "$WS/luminadub-gpu$1.log"; }
+pid_of()  { echo "$WS/luminadub-gpu$1.pid"; }
+port_of() { echo $((BASE_PORT + $1)); }
 
 # Tudo que é baixado fica no volume: religar o pod não baixa nada de novo.
 export HF_HOME="$WS/cache/huggingface"
@@ -44,15 +57,17 @@ banner() {
   echo -e "${N}"
 }
 
-url() {
+url() {  # url <porta>
   if [ -n "${RUNPOD_POD_ID:-}" ]; then
-    echo "https://${RUNPOD_POD_ID}-${PORT}.proxy.runpod.net"
+    echo "https://${RUNPOD_POD_ID}-$1.proxy.runpod.net"
   else
-    echo "http://localhost:${PORT}"
+    echo "http://localhost:$1"
   fi
 }
 
-running() { [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
+running() { local f; f="$(pid_of "$1")"; [ -f "$f" ] && kill -0 "$(cat "$f")" 2>/dev/null; }
+any_running() { local i; for i in $(seq 0 9); do running "$i" && return 0; done; return 1; }
+profile_of() { grep -o "perfil automatico '[a-z0-9]*'" "$(log_of "$1")" 2>/dev/null | tail -1 || true; }
 
 gpu_info() {
   if command -v nvidia-smi >/dev/null 2>&1; then
@@ -63,31 +78,33 @@ gpu_info() {
 cmd_status() {
   banner
   local g; g="$(gpu_info || true)"
-  [ -n "$g" ] && ok "GPU: $g" || warn "Nenhuma GPU NVIDIA encontrada"
-  if running; then
-    ok "Servidor ligado (PID $(cat "$PIDFILE"))"
-    info "Abra: ${B}$(url)${N}"
-    local prof; prof="$(grep -o "perfil automatico '[a-z0-9]*'" "$LOG" 2>/dev/null | tail -1 || true)"
-    [ -n "$prof" ] && info "Configuração: $prof"
-  else
-    warn "Servidor desligado. Ligue com: bash runpod/iniciar.sh"
-  fi
+  [ -n "$g" ] && ok "GPU: $g$( [ "$NGPU" -gt 1 ] && echo " (x$NGPU)")" || warn "Nenhuma GPU NVIDIA encontrada"
+  local i found=0
+  for i in $(seq 0 9); do
+    running "$i" || continue
+    found=1
+    ok "Placa $((i+1)): ligada  ->  ${B}$(url "$(port_of "$i")")${N}  $(profile_of "$i")"
+  done
+  [ "$found" = 1 ] || warn "Servidor desligado. Ligue com: bash runpod/iniciar.sh"
   if command -v nvidia-smi >/dev/null 2>&1; then
-    info "VRAM em uso: $(nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader | head -1)"
+    nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader \
+      | while IFS=, read -r idx used total util; do info "Placa $((idx+1)): VRAM$used de$total, uso$util"; done
   fi
 }
 
 cmd_parar() {
-  if running; then
-    # Primeiro o laço de reinício (senão ele religa o servidor), depois o Python.
-    local pid; pid="$(cat "$PIDFILE")"
-    kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
-    rm -f "$PIDFILE"
-    ok "Servidor desligado."
-  else
-    warn "O servidor já estava desligado."
-  fi
+  local i stopped=0 f
+  for i in $(seq 0 9); do
+    f="$(pid_of "$i")"
+    if [ -f "$f" ]; then
+      # Primeiro o laço de reinício (senão ele religa o servidor), depois o Python.
+      local pid; pid="$(cat "$f")"
+      kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+      rm -f "$f"; stopped=1
+    fi
+  done
   pkill -f "venv-luminadub/bin/python server.py" 2>/dev/null || true
+  [ "$stopped" = 1 ] && ok "Servidor desligado." || warn "O servidor já estava desligado."
 }
 
 # ---------------------------------------------------------------------
@@ -151,52 +168,76 @@ PY
 }
 
 ligar() {
-  step 4/4 "Ligando o servidor"
-  if running; then
+  step 4/4 "Ligando $( [ "$NGPU" -gt 1 ] && echo "$NGPU servidores (um por placa)" || echo "o servidor")"
+  if any_running; then
     warn "Já estava ligado — reiniciando para pegar o código novo"
     cmd_parar >/dev/null
     sleep 2
   fi
-  # Laço de reinício: se o servidor cair, volta sozinho em 5 s (igual ao start.bat).
-  # setsid: laço + servidor num grupo próprio, assim "parar" derruba os dois juntos.
-  nohup setsid bash -c "
-    cd '$APP_DIR'
-    while true; do
-      '$VENV/bin/python' server.py
-      code=\$?
-      [ \$code -eq 0 ] && break
-      echo \"[RUNPOD] Servidor caiu (codigo \$code). Reiniciando em 5 s...\"
-      sleep 5
-    done
-  " >> "$LOG" 2>&1 &
-  echo $! > "$PIDFILE"
+  local i
+  for i in $(seq 0 $((NGPU - 1))); do
+    local port; port="$(port_of "$i")"
+    local env="DUB_PORT=$port"
+    if [ "$NGPU" -gt 1 ]; then
+      # Cada servidor enxerga só a sua placa e tem a sua própria fila.
+      env="$env CUDA_VISIBLE_DEVICES=$i"
+      [ "$i" -gt 0 ] && env="$env DUB_PROJECTS_DIR='$APP_DIR/data/projects-gpu$i'"
+    fi
+    # Laço de reinício: se o servidor cair, volta sozinho em 5 s (igual ao start.bat).
+    # setsid: laço + servidor num grupo próprio, assim "parar" derruba os dois juntos.
+    nohup setsid bash -c "
+      cd '$APP_DIR'
+      export $env
+      while true; do
+        '$VENV/bin/python' server.py
+        code=\$?
+        [ \$code -eq 0 ] && break
+        echo \"[RUNPOD] Servidor caiu (codigo \$code). Reiniciando em 5 s...\"
+        sleep 5
+      done
+    " >> "$(log_of "$i")" 2>&1 &
+    echo $! > "$(pid_of "$i")"
+  done
 
-  info "Esperando o servidor responder..."
+  info "Esperando $( [ "$NGPU" -gt 1 ] && echo "os servidores responderem" || echo "o servidor responder")..."
+  local pending
   for _ in $(seq 1 90); do
-    if curl -s -o /dev/null "http://127.0.0.1:${PORT}/"; then
+    pending=0
+    for i in $(seq 0 $((NGPU - 1))); do
+      curl -s -o /dev/null "http://127.0.0.1:$(port_of "$i")/" || pending=1
+    done
+    if [ "$pending" = 0 ]; then
       echo
       ok "${B}Pronto!${N}"
       echo
-      echo -e "  ${B}Abra no navegador:${N}  ${G}$(url)${N}"
-      local prof; prof="$(grep -o "perfil automatico '[a-z0-9]*'" "$LOG" | tail -1 || true)"
-      [ -n "$prof" ] && echo -e "  ${B}Configuração:${N}       $prof"
+      for i in $(seq 0 $((NGPU - 1))); do
+        local label="Abra no navegador:"
+        [ "$NGPU" -gt 1 ] && label="Placa $((i+1)):           "
+        echo -e "  ${B}${label}${N}  ${G}$(url "$(port_of "$i")")${N}  $(profile_of "$i")"
+      done
+      if [ "$NGPU" -gt 1 ]; then
+        echo
+        echo "  Cada link tem a sua fila: mande uma parte dos cursos em cada um."
+        echo "  Os dublados de todos vao pra mesma pasta: data/dublados/<Curso>/..."
+        echo "  (No RunPod, exponha as portas $BASE_PORT a $(port_of $((NGPU - 1))) em Expose HTTP Ports.)"
+      fi
       echo
       echo "  Comandos úteis:"
-      echo "    bash runpod/iniciar.sh status   → ver GPU, link e VRAM"
+      echo "    bash runpod/iniciar.sh status   → ver placas, links e VRAM"
       echo "    bash runpod/iniciar.sh logs     → acompanhar a dublagem"
-      echo "    bash runpod/iniciar.sh parar    → desligar o servidor"
+      echo "    bash runpod/iniciar.sh parar    → desligar"
       echo
       echo -e "  ${Y}Lembre de dar Stop no pod quando terminar — ele cobra por hora ligado.${N}"
       return 0
     fi
     sleep 2
   done
-  fail "O servidor não respondeu em 3 minutos. Veja o erro com: tail -50 $LOG"
+  fail "Não respondeu em 3 minutos. Veja o erro com: tail -50 $WS/luminadub-gpu0.log"
 }
 
 case "${1:-}" in
   status)     cmd_status ;;
-  logs)       tail -n 50 -f "$LOG" ;;
+  logs)       tail -n 30 -f "$WS"/luminadub-gpu*.log ;;
   parar)      cmd_parar ;;
   reinstalar) cmd_parar || true; rm -rf "$VENV"; banner; instalar; ligar ;;
   ""|iniciar) banner; instalar; ligar ;;

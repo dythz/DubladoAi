@@ -13,6 +13,7 @@ O programa detecta a placa do pod sozinho e se ajusta (veja o README).
 3. **Add volume → Network Volume** de **60 GB** montado em `/workspace`.
    Ambiente Python, modelos e vídeos ficam nele: religar o pod não baixa nada de novo.
 4. Em **Expose HTTP Ports**, coloque **`5000`** (além do 8888 que já vem).
+   Com 2 placas no mesmo pod, coloque **`5000,5001`** (veja "Duas placas" abaixo).
 5. **Deploy**.
 
 ## 2. Instalar e ligar
@@ -49,12 +50,28 @@ bash /workspace/LuminaDub/runpod/iniciar.sh
 Liga em menos de 1 minuto. Para atualizar o código antes: `cd /workspace/LuminaDub && git pull`
 (se o `requirements.txt` mudou, o script reinstala sozinho só o que precisa).
 
+## Duas placas (ou mais) no mesmo pod
+
+Escolha **GPU count = 2** no RunPod. O `iniciar.sh` percebe e liga **um servidor por placa**:
+
+```
+Placa 1:  https://xxxx-5000.proxy.runpod.net
+Placa 2:  https://xxxx-5001.proxy.runpod.net
+```
+
+- Abra os dois links em duas abas e mande **uma parte dos cursos em cada** (ex.: NK101 + NK202
+  numa, NK303 + NK404 na outra). Cada um tem a sua fila.
+- Os modelos são baixados uma vez só; os dublados das duas vão pra **mesma pasta**
+  `data/dublados/<Curso>/...`.
+- Custa o dobro por hora mas termina na metade do tempo: **o custo total é o mesmo**.
+- Pra usar só uma das placas: `DUB_GPUS=1 bash runpod/iniciar.sh`.
+
 ## Comandos
 
 | Comando | O que faz |
 |---|---|
 | `bash runpod/iniciar.sh` | instala (se precisar) e liga |
-| `bash runpod/iniciar.sh status` | GPU, link, perfil e VRAM em uso |
+| `bash runpod/iniciar.sh status` | placas, links, perfil e VRAM em uso |
 | `bash runpod/iniciar.sh logs` | acompanha a dublagem ao vivo (Ctrl+C sai) |
 | `bash runpod/iniciar.sh parar` | desliga o servidor |
 | `bash runpod/iniciar.sh reinstalar` | apaga o ambiente Python e instala do zero |
@@ -70,7 +87,7 @@ Liga em menos de 1 minuto. Para atualizar o código antes: `cd /workspace/Lumina
 
 ## Problemas
 
-- **Link não abre:** confira se a porta `5000` está em *Expose HTTP Ports* e rode `iniciar.sh status`.
+- **Link não abre:** confira se a porta `5000` (e `5001` com 2 placas) está em *Expose HTTP Ports* e rode `iniciar.sh status`.
 - **Erro na instalação:** rode `bash runpod/iniciar.sh reinstalar`.
-- **Ver o erro do servidor:** `tail -50 /workspace/luminadub.log`.
+- **Ver o erro do servidor:** `tail -50 /workspace/luminadub-gpu0.log` (placa 2: `luminadub-gpu1.log`).
 - **`faster-qwen3-tts indisponível`** no início: a voz funciona, só ~2x mais lenta — me mande o log.

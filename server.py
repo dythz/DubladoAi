@@ -675,9 +675,13 @@ def gpu_status():
     """Live GPU name / VRAM / temperature for the header widget."""
     import subprocess
     try:
+        cmd = ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,temperature.gpu,utilization.gpu",
+               "--format=csv,noheader,nounits"]
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0].strip()
+        if visible.isdigit():  # pod com várias placas: mostra a deste servidor
+            cmd += ["-i", visible]
         out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.used,memory.total,temperature.gpu,utilization.gpu",
-             "--format=csv,noheader,nounits"],
+            cmd,
             capture_output=True, text=True, errors="replace", timeout=5,
         ).stdout.strip().splitlines()[0]
         name, used, total, temp, util = [p.strip() for p in out.split(",")]
@@ -1139,9 +1143,11 @@ def get_config():
 
 
 if __name__ == "__main__":
+    # DUB_PORT: uma porta por placa quando o pod tem várias (runpod/iniciar.sh).
+    PORT = int(os.environ.get("DUB_PORT", "5000"))
     print("\n  +======================================+")
     print("  |     LuminaDub AI - Server v2.1       |")
-    print("  |     http://localhost:5000            |")
+    print(f"  |     http://localhost:{PORT:<16}|")
     print("  +======================================+\n")
     try:
         if _sys.platform == "win32":
@@ -1161,7 +1167,7 @@ if __name__ == "__main__":
 
         print("  Using gunicorn + gevent (async SSE — no thread exhaustion)")
         _StandaloneApp(app, {
-            "bind": "0.0.0.0:5000",
+            "bind": f"0.0.0.0:{PORT}",
             "worker_class": "gevent",
             "workers": 1,
             "worker_connections": 1000,
@@ -1178,7 +1184,7 @@ if __name__ == "__main__":
             # traffic. 16 was nowhere near enough and stalled everything once the
             # pool filled up; these threads are I/O-bound (blocked on a queue.get),
             # not CPU-bound, so a much larger pool is cheap.
-            waitress_serve(app, host="0.0.0.0", port=5000, threads=128, max_request_body_size=10*1024*1024*1024)
+            waitress_serve(app, host="0.0.0.0", port=PORT, threads=128, max_request_body_size=10*1024*1024*1024)
         except ImportError:
             print("  Using Flask dev server (install waitress or gunicorn+gevent)")
-            app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+            app.run(host="0.0.0.0", port=PORT, debug=False, threaded=True)

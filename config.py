@@ -8,7 +8,9 @@ _QWEN_LOCAL = str(_BASE / "data" / "models" / "qwen3-tts" / "Qwen3-TTS-12Hz-1.7B
 @dataclass
 class Config:
     BASE_DIR: Path = _BASE
-    PROJECTS_DIR: Path = _BASE / "data" / "projects"
+    # Cada placa de um pod com várias GPUs tem a própria fila (DUB_PROJECTS_DIR);
+    # modelos, vozes e a pasta de dublados são compartilhados.
+    PROJECTS_DIR: Path = Path(os.environ.get("DUB_PROJECTS_DIR", str(_BASE / "data" / "projects")))
     MODEL_CACHE_DIR: Path = _BASE / "data" / "models"
 
     # GPU

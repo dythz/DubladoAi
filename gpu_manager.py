@@ -1,4 +1,5 @@
 import gc
+import os
 import subprocess
 
 import torch
@@ -34,9 +35,14 @@ class GPUManager:
         if not torch.cuda.is_available():
             return {"used_mb": 0, "total_mb": 0, "free_mb": 0}
         try:
+            cmd = ["nvidia-smi", "--query-gpu=memory.used,memory.total",
+                   "--format=csv,noheader,nounits"]
+            # Servidor preso a uma placa (CUDA_VISIBLE_DEVICES=1): mostra a dela.
+            visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0].strip()
+            if visible.isdigit():
+                cmd += ["-i", visible]
             result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=memory.used,memory.total",
-                 "--format=csv,noheader,nounits"],
+                cmd,
                 capture_output=True, text=True, errors='replace', timeout=10,
             )
             # Pods com várias GPUs listam uma por linha: usa a primeira (cuda:0).
