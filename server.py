@@ -88,6 +88,111 @@ if _IS_MAIN_PROCESS:
 # Events that end a job (and its SSE stream).
 TERMINAL_EVENTS = ("done", "error", "stage_error")
 
+
+# ── Organização por pastas ──────────────────────────────────────────────────
+# Quando o site manda a pasta do curso inteira, cada vídeo vem com o caminho
+# dentro dela ("NK101/1. Intro/2. Aula.mp4"). Terminada a dublagem, o vídeo
+# vai pra data/dublados/<mesmo caminho>, com as legendas ao lado.
+LIBRARY_DIR = Path(os.environ.get("DUB_LIBRARY_DIR", str(CONFIG.BASE_DIR / "data" / "dublados")))
+_BAD_CHARS = '<>:"|?*'
+
+
+def _safe_rel_path(raw: str | None) -> str:
+    """'Curso/Modulo/aula.mp4' sem '..', sem drive, sem caracteres invalidos."""
+    if not raw:
+        return ""
+    parts = []
+    for part in str(raw).replace("\\", "/").split("/"):
+        part = "".join(c for c in part if c not in _BAD_CHARS and ord(c) >= 32).strip().rstrip(".")
+        if part and part not in (".", ".."):
+            parts.append(part)
+    return "/".join(parts)
+
+
+def _project_meta(project_id: str) -> dict:
+    try:
+        with open(CONFIG.PROJECTS_DIR / project_id / "meta.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_rel_path(project_id: str, raw: str | None) -> None:
+    rel = _safe_rel_path(raw)
+    if not rel or "/" in project_id or "\\" in project_id or ".." in project_id:
+        return
+    meta_path = CONFIG.PROJECTS_DIR / project_id / "meta.json"
+    if meta_path.exists():
+        return
+    try:
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump({"rel_path": rel}, f, ensure_ascii=False)
+    except OSError as e:
+        logger.warning(f"[LIBRARY] Couldn't save folder path for {project_id}: {e}")
+
+
+def _library_name(project_id: str, video: Path) -> str:
+    """Caminho do dublado dentro da biblioteca/zip: o mesmo da pasta original,
+    ou só o nome do arquivo quando o vídeo veio solto."""
+    rel = _project_meta(project_id).get("rel_path")
+    if rel:
+        return str(Path(rel).with_suffix(".mp4")).replace("\\", "/")
+    return video.name.replace("_dublado_pt", "")
+
+
+def _link_or_copy(src: Path, dst: Path) -> None:
+    import shutil
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        dst.unlink()
+    try:
+        os.link(src, dst)  # mesmo disco: instantâneo e não ocupa espaço extra
+    except OSError:
+        shutil.copy2(src, dst)
+
+
+def _publish_to_library(project_id: str) -> None:
+    video = _dubbed_video(project_id)
+    if video is None:
+        return
+    try:
+        target = LIBRARY_DIR / _library_name(project_id, video)
+        _link_or_copy(video, target)
+        out = video.parent
+        for lang in ("pt", "en"):
+            srt = out / f"{lang}.srt"
+            if srt.exists():
+                _link_or_copy(srt, target.with_suffix(f".{lang}.srt"))
+        logger.info(f"[LIBRARY] {target}")
+    except Exception as e:
+        logger.warning(f"[LIBRARY] Couldn't organize {project_id}: {e}")
+    if CONFIG.CLEAN_WORK_AFTER_DONE:
+        _clean_work(project_id)
+
+
+def _clean_work(project_id: str) -> None:
+    """Apaga os áudios intermediários (~200 MB por vídeo). Ficam as legendas,
+    o state.json e dubbed_vocals.wav (pra refazer só a mixagem se precisar)."""
+    import shutil
+    work = CONFIG.PROJECTS_DIR / project_id / "work"
+    if not work.is_dir():
+        return
+    freed = 0
+    for name in ("audio_full.wav", "audio_whisper.wav", "vocals.wav", "background.wav",
+                 "vocals_enhanced.wav", "final_audio.wav"):
+        f = work / name
+        if f.exists():
+            freed += f.stat().st_size
+            f.unlink(missing_ok=True)
+    for d in ("pt_segments", "pt_synced"):
+        p = work / d
+        if p.is_dir():
+            freed += sum(x.stat().st_size for x in p.rglob("*") if x.is_file())
+            shutil.rmtree(p, ignore_errors=True)
+    if freed:
+        logger.info(f"[CLEAN] {project_id}: {freed / 1024 / 1024:.0f} MB de arquivos de trabalho apagados")
+
 # Active SSE queues keyed by session_id
 sse_queues: dict[str, Queue] = {}
 
@@ -271,6 +376,7 @@ class JobQueue:
                 if event in TERMINAL_EVENTS:
                     if event == "done":
                         job["result"] = "ok"
+                        _publish_to_library(job["project_id"])
                     else:
                         job["result"] = "error"
                         job["error"] = data.get("error") or data.get("message") or "Erro"
@@ -498,6 +604,7 @@ def upload():
 
     dest = project_dir / "input" / f.filename
     f.save(str(dest))
+    _save_rel_path(project_id, request.form.get("rel_path"))
 
     return jsonify({"project_id": project_id, "filename": f.filename})
 
@@ -528,6 +635,7 @@ def upload_chunk():
     (project_dir / "input").mkdir(exist_ok=True)
     (project_dir / "output").mkdir(exist_ok=True)
 
+    _save_rel_path(project_id, request.form.get("rel_path"))
     chunk_path = chunks_dir / f"chunk_{chunk_index:05d}"
     chunk.save(str(chunk_path))
     logger.info(f"[UPLOAD] Chunk {chunk_index+1}/{total_chunks} for {filename} (project {project_id})")
@@ -597,6 +705,7 @@ def list_downloads():
                     videos.append({
                         "project_id": project_dir.name,
                         "filename": f.name,
+                        "rel_path": _project_meta(project_dir.name).get("rel_path", ""),
                         "size_mb": round(stat.st_size / 1024 / 1024, 1),
                         "modified": stat.st_mtime,
                         "url": url,
@@ -641,7 +750,7 @@ def download_zip():
     ids = [i for i in (request.args.get("ids") or "").split(",") if i]
     if not ids:
         ids = [d.name for d in CONFIG.PROJECTS_DIR.iterdir() if d.is_dir()] if CONFIG.PROJECTS_DIR.exists() else []
-    files = [f for f in (_dubbed_video(i) for i in ids) if f]
+    files = [(i, f) for i, f in ((i, _dubbed_video(i)) for i in ids) if f]
     if not files:
         return jsonify({"error": "Nenhum video pronto para baixar"}), 404
 
@@ -650,11 +759,17 @@ def download_zip():
         used = set()
         # Videos are already compressed: store them as-is (fast, no CPU).
         with zipfile.ZipFile(sink, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as zf:
-            for f in files:
-                name = f.name.replace("_dublado_pt", "")
-                stem, n = Path(name).stem, 2
-                while name in used:  # same lesson name in two courses
-                    name = f"{stem} ({n}).mp4"; n += 1
+            # Mesma estrutura de pastas do curso (quando veio de uma pasta),
+            # em ordem: NK101/1. Intro/2. Aula.mp4 ...
+            import re as _re
+            def _natural(pf):
+                return [int(t) if t.isdigit() else t for t in _re.split(r"(\d+)", _library_name(*pf).lower())]
+            files.sort(key=_natural)
+            for pid, f in files:
+                name = _library_name(pid, f)
+                base, n = name[:-4], 2
+                while name in used:  # same lesson name twice
+                    name = f"{base} ({n}).mp4"; n += 1
                 used.add(name)
                 with zf.open(name, "w", force_zip64=True) as dest, open(f, "rb") as src:
                     while True:
@@ -697,6 +812,7 @@ def start_pipeline():
 
     session_id = data.get("session_id", project_id)
     filename = data.get("filename", "video")
+    _save_rel_path(project_id, data.get("rel_path"))
 
     tts_engine = data.get("tts_engine", "qwen")
     # Qwen speaks whole phrases far more naturally than 7-word fragments, so its

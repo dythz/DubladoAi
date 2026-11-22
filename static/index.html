@@ -144,8 +144,10 @@ kbd{font-family:'Space Grotesk',monospace;font-size:9px;padding:1px 5px;border-r
 <h3 class="text-base font-bold mb-0.5" id="uploadTitle">Arraste os videos aqui</h3>
 <p class="text-on-surface-variant text-xs font-label" id="uploadSubtitle">MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios</p>
 <p class="text-primary text-xs font-semibold mt-1 font-label" id="selectFileText">CLIQUE PARA SELECIONAR</p>
+<button type="button" id="folderBtn" class="mt-2 inline-flex items-center gap-1 px-3 h-7 rounded bg-primary/10 border border-primary/30 text-primary text-[10px] font-label font-bold hover:bg-primary/20 transition-colors"><span class="material-symbols-outlined" style="font-size:14px">folder_open</span> SELECIONAR PASTA DO CURSO</button>
 </div>
 <input type="file" id="videoInput" accept=".mp4,.mov,.avi,.mkv,.webm" multiple style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px"/>
+<input type="file" id="folderInput" webkitdirectory directory multiple style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px"/>
 <!-- File list -->
 <div id="fileList" class="hidden px-5 pb-2">
 <div class="flex items-center justify-between mb-1.5">
@@ -371,8 +373,41 @@ var videoInput = document.getElementById('videoInput');
 dropZone.addEventListener('click', function(e){e.preventDefault();e.stopPropagation();videoInput.click()});
 dropZone.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();this.classList.add('drop-over')});
 dropZone.addEventListener('dragleave',function(e){e.preventDefault();e.stopPropagation();this.classList.remove('drop-over')});
-dropZone.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();this.classList.remove('drop-over');if(e.dataTransfer.files&&e.dataTransfer.files.length>0)addFiles(e.dataTransfer.files)});
+dropZone.addEventListener('drop',function(e){
+    e.preventDefault();e.stopPropagation();this.classList.remove('drop-over');
+    var items=e.dataTransfer.items,entries=[];
+    if(items)for(var i=0;i<items.length;i++){var en=items[i].webkitGetAsEntry&&items[i].webkitGetAsEntry();if(en)entries.push(en)}
+    if(entries.some(function(en){return en.isDirectory})){
+        // Pasta arrastada: le todas as subpastas e guarda o caminho de cada aula.
+        toast('Lendo a pasta...','info');
+        Promise.all(entries.map(function(en){return readEntry(en,'')})).then(function(lists){addFiles([].concat.apply([],lists))});
+    }else if(e.dataTransfer.files&&e.dataTransfer.files.length>0)addFiles(e.dataTransfer.files);
+});
 videoInput.addEventListener('change',function(){if(this.files&&this.files.length>0)addFiles(this.files);this.value=''});
+var folderInput=document.getElementById('folderInput');
+document.getElementById('folderBtn').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();folderInput.click()});
+folderInput.addEventListener('change',function(){if(this.files&&this.files.length>0)addFiles(this.files);this.value=''});
+
+// Le uma pasta arrastada (e as subpastas), marcando cada arquivo com o caminho relativo.
+function readEntry(entry,prefix){
+    return new Promise(function(resolve){
+        if(entry.isFile){
+            entry.file(function(f){f._relPath=prefix+f.name;resolve([f])},function(){resolve([])});
+        }else if(entry.isDirectory){
+            var reader=entry.createReader(),all=[];
+            (function readBatch(){ // readEntries devolve no maximo ~100 por vez
+                reader.readEntries(function(batch){
+                    if(!batch.length){
+                        Promise.all(all.map(function(c){return readEntry(c,prefix+entry.name+'/')})).then(function(l){resolve([].concat.apply([],l))});
+                    }else{all=all.concat(Array.from(batch));readBatch()}
+                },function(){resolve([])});
+            })();
+        }else resolve([]);
+    });
+}
+function relPathOf(f){return f._relPath||f.webkitRelativePath||f.name}
+// Ordem natural: "2. Aula" antes de "10. Aula", pasta por pasta.
+function naturalSort(a,b){return relPathOf(a).localeCompare(relPathOf(b),undefined,{numeric:true,sensitivity:'base'})}
 
 function addFiles(filesList){
     for(var i=0;i<filesList.length;i++){
@@ -380,11 +415,12 @@ function addFiles(filesList){
         var ext=file.name.split('.').pop().toLowerCase();
         if(['mp4','mov','avi','mkv','webm'].indexOf(ext)===-1){continue}
         if(file.size>5*1024*1024*1024){continue}
-        // Avoid duplicates
+        // Avoid duplicates (same path inside the course + same size)
         var exists=false;
-        for(var j=0;j<videoFiles.length;j++){if(videoFiles[j].name===file.name&&videoFiles[j].size===file.size){exists=true;break}}
+        for(var j=0;j<videoFiles.length;j++){if(relPathOf(videoFiles[j])===relPathOf(file)&&videoFiles[j].size===file.size){exists=true;break}}
         if(!exists) videoFiles.push(file);
     }
+    videoFiles.sort(naturalSort);
     renderFileList();
 }
 
@@ -411,7 +447,7 @@ function renderFileList(){
         videoFiles.forEach(function(f,i){
             var div=document.createElement('div');
             div.className='flex items-center gap-2 bg-surface-container-low rounded px-2 py-1.5 group';
-            div.innerHTML='<span class="material-symbols-outlined text-primary" style="font-size:14px">movie</span><span class="flex-1 text-[11px] font-label text-on-surface truncate">'+f.name+'</span><span class="text-[10px] font-label text-on-surface-variant">'+(f.size/1024/1024).toFixed(1)+'MB</span><button onclick="removeFile('+i+')" class="text-on-surface-variant hover:text-error transition-colors"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>';
+            div.innerHTML='<span class="material-symbols-outlined text-primary" style="font-size:14px">movie</span><span class="flex-1 text-[11px] font-label text-on-surface truncate" title="'+relPathOf(f)+'">'+relPathOf(f)+'</span><span class="text-[10px] font-label text-on-surface-variant">'+(f.size/1024/1024).toFixed(1)+'MB</span><button onclick="removeFile('+i+')" class="text-on-surface-variant hover:text-error transition-colors"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>';
             list.appendChild(div);
         });
         document.getElementById('uploadTitle').textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'')+' selecionado'+(videoFiles.length!==1?'s':'');
@@ -745,7 +781,7 @@ function renderDownloads(){
 function drawDownloads(){
     {
         var q=document.getElementById('downloadsSearch').value.trim().toLowerCase();
-        var videos=allDownloads.filter(function(v){return !q||v.filename.toLowerCase().indexOf(q)!==-1});
+        var videos=allDownloads.filter(function(v){return !q||(v.rel_path||v.filename).toLowerCase().indexOf(q)!==-1});
         var key=q+'|'+JSON.stringify(videos.map(function(v){return [v.project_id,v.modified]}));
         if(key===lastDownloadsKey)return;
         lastDownloadsKey=key;
@@ -761,7 +797,7 @@ function drawDownloads(){
             div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary/50 hover:border-primary transition-all';
             div.innerHTML=
                 '<div class="flex justify-between items-start gap-2">'+
-                    '<span class="text-[11px] font-label text-on-surface leading-tight cursor-pointer hover:text-primary transition-colors" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="'+v.filename+'">'+v.filename.replace('_dublado_pt.mp4','')+'</span>'+
+                    '<span class="text-[11px] font-label text-on-surface leading-tight cursor-pointer hover:text-primary transition-colors" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="'+(v.rel_path||v.filename)+'">'+(v.rel_path?v.rel_path.replace(/\.[^./]+$/,''):v.filename.replace('_dublado_pt.mp4',''))+'</span>'+
                 '</div>'+
                 '<div class="flex justify-between items-center">'+
                     '<span class="text-[9px] font-label text-on-surface-variant">'+fmtSize(v.size_mb)+' &middot; '+fmtDate(v.modified)+'</span>'+
@@ -803,6 +839,7 @@ async function uploadInChunks(file, fileIdx, totalFiles){
         fd.append('chunk_index',i);
         fd.append('total_chunks',total);
         fd.append('filename',file.name);
+        if(relPathOf(file)!==file.name)fd.append('rel_path',relPathOf(file));
         if(pid)fd.append('project_id',pid);
         for(var attempt=0;attempt<MAX_RETRY;attempt++){
             try{
@@ -865,6 +902,7 @@ document.getElementById('startBtn').addEventListener('click',async function(){
 
             var startData=await(await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
                 project_id:pid,session_id:sid,filename:file.name,
+                rel_path:relPathOf(file)!==file.name?relPathOf(file):'',
                 tts_engine:ttsEngine,translation_engine:translationEngine,
                 ollama_model:document.getElementById('ollamaModel').value,
                 edge_voice:document.getElementById('edgeVoice').value,vocal_separation:vocalSeparation,

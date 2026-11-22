@@ -32,6 +32,13 @@ Leva mais ou menos o mesmo tempo que a duração do vídeo (numa RTX 3060).
 3. Arraste os vídeos, deixe **Qwen3** e **Voz do vídeo** marcados e clique em **Iniciar Dublagem**.
 4. Os vídeos prontos ficam na aba **Prontos** (dá para baixar um por um ou **Baixar todos** em .zip).
 
+**Curso inteiro de uma vez:** clique em **Selecionar pasta do curso** (ou arraste a pasta)
+e todas as aulas das subpastas entram na fila em ordem (1, 2, … 10). Os dublados saem
+organizados com as mesmas pastas em `data\dublados\<Curso>\<Módulo>\<aula>.mp4`, com a
+legenda `.pt.srt` ao lado. No RunPod, o **Baixar todos** vem num .zip com essas pastas.
+Quando cada vídeo termina, os áudios intermediários (~200 MB por vídeo) são apagados.
+`data\dublados` não é apagado pelo "Limpar tudo" do `start.bat`.
+
 Pode colocar vários vídeos de uma vez: eles são dublados um atrás do outro. Se o computador desligar no meio, ao abrir o `start.bat` de novo ele continua de onde parou.
 
 ## Placa de vídeo (detecção automática)

@@ -33,6 +33,9 @@ class Config:
     # Enquanto um vídeo gera a voz, o próximo da fila já faz extrair, separar,
     # transcrever e traduzir. Só em placas com VRAM sobrando.
     PIPELINE_OVERLAP: bool = False
+    # Depois que o vídeo fica pronto, apaga os áudios intermediários (~200 MB
+    # por vídeo; num curso de 30 h passaria de 90 GB).
+    CLEAN_WORK_AFTER_DONE: bool = True
 
     # Demucs
     # htdemucs_ft (4-model fine-tuned ensemble) separates cleaner but is ~4x slower.
