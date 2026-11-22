@@ -178,6 +178,11 @@ class Config:
             _log_profile_once(profile, None, None, auto=False)
         for key, val in PROFILES[profile].items():
             setattr(self, key, val)
+        # Ajuste fino sem mexer no código (ex.: no start.bat):
+        #   set "DUB_QWEN_PARALLEL=2"  -> 2 falas ao mesmo tempo
+        par = os.environ.get("DUB_QWEN_PARALLEL", "").strip()
+        if par.isdigit() and int(par) >= 1:
+            self.QWEN_PARALLEL = int(par)
 
     def ensure_dirs(self):
         self.PROJECTS_DIR.mkdir(parents=True, exist_ok=True)

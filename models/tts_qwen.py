@@ -208,6 +208,20 @@ def get_model(config: Config, use_fast: bool, slot: int = 0, warm: bool = True):
     return model
 
 
+def _log_vram() -> None:
+    """Free VRAM after the voice models are in. On Windows a full card doesn't
+    error, it silently spills into system RAM and gets slow — so warn early."""
+    try:
+        free_b, total_b = torch.cuda.mem_get_info()
+    except Exception:
+        return
+    free_gb, total_gb = free_b / 1024**3, total_b / 1024**3
+    logger.info(f"[QWEN] VRAM livre depois de carregar a voz: {free_gb:.1f} de {total_gb:.1f} GB")
+    if free_gb < 0.8:
+        logger.warning("[QWEN] VRAM quase cheia: pode transbordar pra RAM e ficar LENTO. "
+                       "Se a voz ficar mais lenta, use DUB_QWEN_PARALLEL=1")
+
+
 def preload_async(config: Config) -> None:
     """Start loading Qwen's weights in the background so they're ready when
     the voice stage starts; Demucs/Whisper/translation run meanwhile."""
@@ -220,11 +234,15 @@ def preload_async(config: Config) -> None:
     if _preload_thread is not None and _preload_thread.is_alive():
         return
 
+    slots = min(max(1, int(config.QWEN_PARALLEL)), _slot_limit) if use_fast else 1
+
     def _run():
-        try:
-            get_model(config, use_fast, slot=0, warm=False)
-        except Exception as e:
-            logger.warning(f"[QWEN] Background preload failed ({e}); will load at the voice stage")
+        for slot in range(slots):
+            try:
+                get_model(config, use_fast, slot=slot, warm=False)
+            except Exception as e:
+                logger.warning(f"[QWEN] Background preload of slot {slot} failed ({e}); will load at the voice stage")
+                break
 
     _preload_thread = threading.Thread(target=_run, name="qwen-preload", daemon=True)
     _preload_thread.start()
@@ -263,6 +281,7 @@ class QwenTTSWrapper:
                     break
             if len(self.fast_pool) > 1:
                 logger.info(f"[QWEN] Generating {len(self.fast_pool)} cues at a time")
+            _log_vram()
         else:
             self.model = cached
 

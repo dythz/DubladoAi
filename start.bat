@@ -13,6 +13,9 @@ REM O ambiente antigo continua em .venv como reserva.
 set "PYEXE=%~dp0.venv-fast\Scripts\python.exe"
 REM Perfil de hardware (config.py -> PROFILES): ajustado pra RTX 3060 12GB
 set "DUB_PROFILE=rtx3060"
+REM Falas geradas ao mesmo tempo. Na RTX 3060 o 2 ficou ~3x MAIS LENTO
+REM (a VRAM transborda pra RAM), entao fica 1.
+set "DUB_QWEN_PARALLEL=1"
 if not exist "%PYEXE%" (
     echo      ERRO: venv nao encontrado em .venv-fast\Scripts\python.exe
     echo      Rode: py -3.11 -m venv .venv-fast  e depois instale requirements.txt
