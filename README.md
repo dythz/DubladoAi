@@ -46,6 +46,20 @@ O programa olha a placa quando abre e escolhe as configurações sozinho, pela V
 | sem NVIDIA | `cpu` | roda na CPU (bem lento) |
 
 O perfil escolhido aparece no log: `[GPU] ... -> perfil automatico '...'`.
+
+### Turbo de velocidade
+
+| Recurso | Onde liga | O que faz |
+|---|---|---|
+| Qwen pré-carregado | todas | carrega a voz em segundo plano enquanto separa/transcreve (~60 s a menos) |
+| Pula a separação | todas | sem música de fundo nas pausas (< -45 dBFS), não roda o Demucs |
+| Modelos pequenos sempre carregados | 12 GB | Demucs e tradutor não recarregam a cada vídeo (~30 s a menos) |
+| Várias falas ao mesmo tempo | 24 GB: 2 · 32 GB+: 3 | cópias do Qwen gerando em paralelo, cada uma no seu stream CUDA |
+| Whisper em lote | 24 GB: 8 · 32 GB+: 16 | transcreve vários trechos de uma vez |
+| Vídeos em paralelo | 24 GB+ | o próximo da fila adianta extrair/separar/transcrever/traduzir enquanto o atual gera a voz |
+
+Tudo isso tem plano B: se faltar VRAM ou um recurso não existir na versão instalada,
+o programa volta pro modo normal sozinho e avisa no log.
 Para forçar um perfil, defina `DUB_PROFILE` (ex.: `DUB_PROFILE=gpu24`).
 Se uma etapa ficar sem memória na placa, ela libera os outros modelos e tenta de novo.
 

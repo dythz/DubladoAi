@@ -127,6 +127,9 @@ class JobQueue:
         self._mp_ctx = mp.get_context("spawn")
         self._job_input_queue = self._mp_ctx.Queue()
         self._event_queue = self._mp_ctx.Queue()
+        # Dicas "o próximo da fila é X" pro worker adiantar as primeiras etapas
+        # dele enquanto o atual gera a voz (config.PIPELINE_OVERLAP).
+        self._prefetch_queue = self._mp_ctx.Queue()
         self._worker_process = None
         self._worker_lock = Lock()
         # Mirrors worker.MAX_JOBS_PER_WORKER — see _retire_worker_if_due below.
@@ -139,7 +142,7 @@ class JobQueue:
             import worker as _worker_module
             self._worker_process = self._mp_ctx.Process(
                 target=_worker_module.run_persistent,
-                args=(self._job_input_queue, self._event_queue),
+                args=(self._job_input_queue, self._event_queue, self._prefetch_queue),
                 daemon=False,
             )
             self._worker_process.start()
@@ -171,6 +174,15 @@ class JobQueue:
                     self._worker_process.join(timeout=5)
             self._jobs_sent_to_worker = 0
 
+    def _hint_next_job(self):
+        """Tell the worker which video comes next (caller holds self._lock)."""
+        if self._queue:
+            nxt = self._queue[0]
+            try:
+                self._prefetch_queue.put_nowait((nxt["project_id"], nxt["config_overrides"]))
+            except Exception:
+                pass
+
     def enqueue(self, session_id: str, project_id: str, filename: str, config_overrides: dict) -> int:
         with self._lock:
             self._counter += 1
@@ -193,6 +205,8 @@ class JobQueue:
                 return 0
             else:
                 self._queue.append(job)
+                if len(self._queue) == 1:
+                    self._hint_next_job()
                 return len(self._queue)
 
     def update_job(self, session_id: str, progress: float, stage: str):
@@ -208,6 +222,8 @@ class JobQueue:
             with self._worker_lock:
                 self._jobs_sent_to_worker += 1
             logger.info(f"[WORKER] Job {job['id']} ({job['filename']}) sent to persistent worker")
+            with self._lock:
+                self._hint_next_job()
             job_start = time.time()
 
             while True:

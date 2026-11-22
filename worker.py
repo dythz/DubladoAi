@@ -58,8 +58,88 @@ _STAGE_MODELS = {
     "translate": {"translation"},
     "synthesize": {"qwen3-tts", "qwen3-accent"},
 }
-# Qwen is the slowest to reload (~11s); keep it warm across videos.
+# Qwen is the slowest to reload (~11s); keep it warm across videos. Each
+# profile can add more (config.ALWAYS_WARM_MODELS).
 _ALWAYS_WARM = {"qwen3-tts", "qwen3-accent"}
+
+
+# --- Vídeos em paralelo (PIPELINE_OVERLAP) ---------------------------------
+# Enquanto o vídeo atual gera a voz, o próximo da fila faz extrair, separar,
+# transcrever e traduzir numa thread. Quando a vez dele chega, essas etapas já
+# estão marcadas como concluídas no state.json e são puladas.
+_PREFETCH_STAGES = ["extract", "separate", "transcribe", "translate"]
+_prefetch_thread = None
+_prefetched: set = set()
+
+
+def _prefetch_project(project_id: str, config_overrides: dict) -> None:
+    log = logging.getLogger("dubbing")
+    try:
+        from config import Config
+        from pipeline import STAGE_FUNCTIONS, DubbingPipeline
+
+        config = Config()
+        for key, val in config_overrides.items():
+            if hasattr(config, key):
+                setattr(config, key, val)
+        project_dir = config.PROJECTS_DIR / project_id
+        video_files = list((project_dir / "input").glob("*"))
+        if not video_files:
+            return
+        pipeline = DubbingPipeline(project_id=project_id, config=config)
+        state = pipeline.state
+        t0 = time.time()
+        log.info(f"[OVERLAP] Adiantando o proximo video ({project_id}) enquanto a voz e gerada")
+        for stage_name in _PREFETCH_STAGES:
+            if stage_name in state.completed_stages:
+                continue
+            if stage_name == "separate" and not config.enable_vocal_separation:
+                continue
+            state.mark_running(stage_name)
+            result = STAGE_FUNCTIONS[stage_name](project_dir, config, progress=lambda *a, **k: None)
+            if not result.success:
+                state.mark_error(stage_name, result.error or "erro")
+                log.warning(f"[OVERLAP] {stage_name} falhou no adiantamento ({result.error}); roda de novo na vez dele")
+                return
+            if stage_name == "transcribe":
+                en_srt = project_dir / "work" / "en.srt"
+                if not en_srt.exists() or en_srt.stat().st_size < 10:
+                    state.mark_error(stage_name, "transcricao vazia")
+                    return
+            state.mark_completed(stage_name, metadata=result.metadata or {})
+        log.info(f"[OVERLAP] Proximo video adiantado em {time.time() - t0:.1f}s")
+    except Exception:
+        log.exception(f"[OVERLAP] Erro adiantando {project_id}; ele roda normal na vez dele")
+
+
+def _start_prefetch(prefetch_queue, current_project: str) -> None:
+    """Chamado logo depois que o Qwen carregou (nada de captura de CUDA graph
+    rodando): pega a dica mais recente do servidor sobre o próximo da fila."""
+    global _prefetch_thread
+    if prefetch_queue is None or (_prefetch_thread is not None and _prefetch_thread.is_alive()):
+        return
+    hints = []
+    while True:
+        try:
+            hints.append(prefetch_queue.get_nowait())
+        except Exception:
+            break
+    for project_id, overrides in hints:
+        if project_id == current_project or project_id in _prefetched:
+            continue
+        _prefetched.add(project_id)
+        import threading
+        _prefetch_thread = threading.Thread(
+            target=_prefetch_project, args=(project_id, overrides), name="prefetch", daemon=True
+        )
+        _prefetch_thread.start()
+        return
+
+
+def _wait_prefetch() -> None:
+    if _prefetch_thread is not None and _prefetch_thread.is_alive():
+        logging.getLogger("dubbing").info("[OVERLAP] Esperando o adiantamento do proximo video terminar")
+        _prefetch_thread.join()
 
 
 def _is_oom(error) -> bool:
@@ -67,7 +147,7 @@ def _is_oom(error) -> bool:
     return "out of memory" in msg or "outofmemory" in msg or "cublas_status_alloc_failed" in msg
 
 
-def run(project_id: str, session_id: str, config_overrides: dict, event_queue) -> None:
+def run(project_id: str, session_id: str, config_overrides: dict, event_queue, prefetch_queue=None) -> None:
     """Execute the dubbing pipeline. Called in a subprocess by JobQueue."""
 
     def emit(event: str, data: dict) -> None:
@@ -108,6 +188,16 @@ def run(project_id: str, session_id: str, config_overrides: dict, event_queue) -
         total_stages = len(stages_to_run)
         start_time = time.time()
 
+        if "synthesize" in stages_to_run:
+            # Qwen carrega em segundo plano enquanto as primeiras etapas rodam.
+            try:
+                from models.tts_qwen import preload_async
+                preload_async(config)
+            except Exception as e:
+                logging.getLogger("dubbing").warning(f"[QWEN] Preload not started ({e})")
+            if config.PIPELINE_OVERLAP and prefetch_queue is not None:
+                config._after_tts_load = lambda: _start_prefetch(prefetch_queue, project_id)
+
         for stage_name in stages_to_run:
             display = _STAGE_NAMES.get(stage_name, stage_name)
             emit("stage_start", {
@@ -134,7 +224,7 @@ def run(project_id: str, session_id: str, config_overrides: dict, event_queue) -
 
             if config.EVICT_IDLE_MODELS:
                 from models import model_cache
-                keep = _STAGE_MODELS.get(stage_name, set()) | _ALWAYS_WARM
+                keep = _STAGE_MODELS.get(stage_name, set()) | _ALWAYS_WARM | set(config.ALWAYS_WARM_MODELS)
                 evicted = model_cache.keep_only(keep)
                 if evicted:
                     logging.getLogger("dubbing").info(f"[GPU] Freed idle models before {stage_name}: {evicted}")
@@ -218,7 +308,7 @@ def run(project_id: str, session_id: str, config_overrides: dict, event_queue) -
 MAX_JOBS_PER_WORKER = 10
 
 
-def run_persistent(job_queue, event_queue) -> None:
+def run_persistent(job_queue, event_queue, prefetch_queue=None) -> None:
     """Long-lived worker loop — processes jobs one at a time from job_queue,
     in the SAME process, so module-level model caches (models/model_cache.py)
     stay warm across videos instead of reloading Demucs/Whisper/Qwen3-TTS from
@@ -242,13 +332,15 @@ def run_persistent(job_queue, event_queue) -> None:
         logger.info(f"[PERSISTENT WORKER] Job #{jobs_done} on this worker — project {project_id}")
         logger.info(f"{'=' * 60}")
         try:
-            run(project_id, session_id, config_overrides, event_queue)
+            run(project_id, session_id, config_overrides, event_queue, prefetch_queue)
         except Exception:
             logger.exception(f"[PERSISTENT WORKER] Unhandled error running job for {project_id}")
             try:
                 event_queue.put((session_id, "error", {"message": "Erro interno no worker."}))
             except Exception:
                 pass
+
+        _wait_prefetch()
 
         try:
             import gc

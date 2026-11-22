@@ -91,6 +91,14 @@ def _synthesize_qwen(project_dir, config, cues, segments_dir, progress):
     wrapper.load(reference_audio=reference_audio, ref_text=ref_text, br_accent=br_accent)
     t_load = time.time() - t_load_start
     logger.info(f"[SYNTHESIZE] Qwen3-TTS loaded in {t_load:.1f}s")
+    # Qwen pronto (sem captura de CUDA graph rolando): o worker pode começar a
+    # adiantar o próximo vídeo da fila em paralelo (PIPELINE_OVERLAP).
+    hook = getattr(config, "_after_tts_load", None)
+    if hook:
+        try:
+            hook()
+        except Exception as e:
+            logger.warning(f"[SYNTHESIZE] Overlap hook failed ({e})")
     total = len(cues)
     t_start = time.time()
 

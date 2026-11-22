@@ -16,6 +16,23 @@ class Config:
     MAX_VRAM_MB: int = 90000
     # Drop models the current stage doesn't use from VRAM (Qwen stays warm).
     EVICT_IDLE_MODELS: bool = False
+    # Kinds (model_cache key[0]) never evicted, even with EVICT_IDLE_MODELS.
+    ALWAYS_WARM_MODELS: list = field(default_factory=lambda: ["qwen3-tts", "qwen3-accent"])
+
+    # --- Velocidade ---
+    # Carrega o Qwen em segundo plano enquanto Demucs/Whisper/tradução rodam,
+    # em vez de esperar a etapa de voz começar (~60 s a menos no 1º vídeo).
+    QWEN_PRELOAD: bool = True
+    # Quantas falas o Qwen gera ao mesmo tempo (cada uma num modelo próprio na
+    # VRAM). 1 = uma por vez. Só vale com o backend "faster".
+    QWEN_PARALLEL: int = 1
+    # Pula o Demucs quando o fundo é silêncio (aula só com narração): mede o
+    # volume nas pausas da fala; abaixo deste nível (dBFS) não há música.
+    AUTO_SKIP_SEPARATION: bool = True
+    SEPARATION_SILENCE_DB: float = -45.0
+    # Enquanto um vídeo gera a voz, o próximo da fila já faz extrair, separar,
+    # transcrever e traduzir. Só em placas com VRAM sobrando.
+    PIPELINE_OVERLAP: bool = False
 
     # Demucs
     # htdemucs_ft (4-model fine-tuned ensemble) separates cleaner but is ~4x slower.
@@ -38,6 +55,9 @@ class Config:
     WHISPER_LANGUAGE: str = "en"
     WHISPER_VAD_FILTER: bool = True
     WHISPER_BEAM_SIZE: int = 5
+    # >1 = modo em lote do faster-whisper (vários trechos ao mesmo tempo).
+    # 1 = sequencial, igual sempre foi.
+    WHISPER_BATCH_SIZE: int = 1
     WORDS_PER_CUE: int = 7
     MAX_WORDS_PER_CUE: int = 10
     MAX_CHARS_PER_CUE: int = 45
@@ -183,6 +203,11 @@ PROFILES: dict[str, dict] = {
         "WHISPER_BEAM_SIZE": 1,
         # A 7-8B Ollama model takes ~5GB — free it before TTS loads.
         "OLLAMA_UNLOAD_AFTER": True,
+        # Demucs (~0.3GB) e Opus-MT (~1GB) são pequenos: ficam carregados entre
+        # vídeos em vez de recarregar (~30 s) a cada um. Whisper ainda sai.
+        "ALWAYS_WARM_MODELS": ["qwen3-tts", "qwen3-accent", "demucs", "translation"],
+        "QWEN_PARALLEL": 1,
+        "PIPELINE_OVERLAP": False,
     },
     # 16-24GB (RTX 4080/4090/3090, A5000, L4). Whisper + Demucs + Opus-MT +
     # Qwen cabem juntos, então nada é descarregado entre etapas (sem recarregar
@@ -193,6 +218,10 @@ PROFILES: dict[str, dict] = {
         "WHISPER_COMPUTE_TYPE": "float16",
         "WHISPER_BEAM_SIZE": 1,
         "OLLAMA_UNLOAD_AFTER": True,
+        # 2 falas ao mesmo tempo (~4-5GB de VRAM por cópia do Qwen).
+        "QWEN_PARALLEL": 2,
+        "PIPELINE_OVERLAP": True,
+        "WHISPER_BATCH_SIZE": 8,
     },
     # 32GB ou mais (RTX 5090, A6000, L40S, RTX 6000 Ada, A100, H100...).
     # Tudo fica carregado o tempo todo, inclusive o Ollama.
@@ -202,6 +231,9 @@ PROFILES: dict[str, dict] = {
         "WHISPER_COMPUTE_TYPE": "float16",
         "WHISPER_BEAM_SIZE": 1,
         "OLLAMA_UNLOAD_AFTER": False,
+        "QWEN_PARALLEL": 3,
+        "PIPELINE_OVERLAP": True,
+        "WHISPER_BATCH_SIZE": 16,
     },
     # Sem GPU NVIDIA: roda na CPU (muito lento, só pra não quebrar).
     "cpu": {
@@ -213,6 +245,8 @@ PROFILES: dict[str, dict] = {
         "QWEN_BACKEND": "transformers",
         "QWEN_BATCH_CHARS": 360,
         "EVICT_IDLE_MODELS": True,
+        "QWEN_PRELOAD": False,
+        "QWEN_PARALLEL": 1,
     },
 }
 

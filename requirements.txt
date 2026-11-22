@@ -3,7 +3,7 @@
 #   pip install torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu126
 torch==2.7.1
 torchaudio==2.7.1
-faster-whisper>=1.0.0
+faster-whisper>=1.1.0  # 1.1+ has the batched mode used on big GPUs
 demucs>=4.0.0
 # faster-qwen3-tts needs transformers 5; qwen-tts-hf breaks on 5.22 (Mimi
 # encoder 'upsample' property), 5.15.1 is the version it was verified on.
