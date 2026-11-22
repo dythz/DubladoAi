@@ -141,7 +141,7 @@ kbd{font-family:'Space Grotesk',monospace;font-size:9px;padding:1px 5px;border-r
 <div id="uploadIcon" class="size-12 bg-surface-container-high rounded-full flex items-center justify-center mb-2 inner-glow">
 <span class="material-symbols-outlined text-primary text-xl">cloud_upload</span>
 </div>
-<h3 class="text-base font-bold mb-0.5" id="uploadTitle">Arraste os videos aqui</h3>
+<h3 class="text-base font-bold mb-0.5" id="uploadTitle">Arraste os videos ou a pasta do curso aqui</h3>
 <p class="text-on-surface-variant text-xs font-label" id="uploadSubtitle">MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios</p>
 <p class="text-primary text-xs font-semibold mt-1 font-label" id="selectFileText">CLIQUE PARA SELECIONAR</p>
 <button type="button" id="folderBtn" class="mt-2 inline-flex items-center gap-1 px-3 h-7 rounded bg-primary/10 border border-primary/30 text-primary text-[10px] font-label font-bold hover:bg-primary/20 transition-colors"><span class="material-symbols-outlined" style="font-size:14px">folder_open</span> SELECIONAR PASTA DO CURSO</button>
@@ -317,6 +317,24 @@ Prontos <span id="downloadsCount" class="bg-surface-container-high text-on-surfa
 </aside>
 </div>
 
+<!-- Revisao da pasta do curso -->
+<div id="folderModal" class="hidden fixed inset-0 z-[92] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onclick="if(event.target===this)closeFolderModal()">
+<div class="glass rounded-2xl w-full max-w-2xl max-h-[88vh] flex flex-col anim-in" style="background:rgba(22,26,33,.97)">
+<div class="flex items-center justify-between px-5 pt-5 pb-3">
+<h3 class="text-base font-bold flex items-center gap-2 min-w-0"><span class="material-symbols-outlined text-primary" style="font-variation-settings:'FILL' 1">folder_open</span><span id="fmTitle" class="truncate">Pasta</span></h3>
+<button class="ctrl-btn" onclick="closeFolderModal()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div id="fmStats" class="flex flex-wrap gap-1.5 px-5 pb-3"></div>
+<div id="fmChecks" class="mx-5 mb-3 p-3 rounded-lg bg-surface-container-lowest border border-outline-variant/30 space-y-1.5"></div>
+<div id="fmTree" class="flex-1 overflow-y-auto px-5 space-y-1.5 min-h-[120px]"></div>
+<div class="flex items-center justify-end gap-2 px-5 py-4 border-t border-white/5 mt-3">
+<button class="h-9 px-4 rounded-lg text-xs font-label text-on-surface-variant hover:text-on-surface" onclick="closeFolderModal()">Cancelar</button>
+<button id="fmAdd" class="h-9 px-4 rounded-lg bg-surface-container-high text-xs font-label font-semibold hover:bg-surface-container-highest disabled:opacity-30" onclick="confirmReview(false)">Adicionar a lista</button>
+<button id="fmStart" class="btn-glow h-9 px-4 rounded-lg bg-primary text-on-primary-fixed text-xs font-label font-bold flex items-center gap-1.5 disabled:opacity-30" onclick="confirmReview(true)"><span class="material-symbols-outlined" style="font-size:16px">bolt</span><span id="fmStartLabel">Dublar agora</span></button>
+</div>
+</div>
+</div>
+
 <!-- Tela de carregamento: modelos de IA sendo carregados na placa -->
 <div id="warmupOverlay" class="hidden fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
 <div class="glass rounded-2xl w-full max-w-md p-6 anim-in" style="background:rgba(22,26,33,.97)">
@@ -426,20 +444,6 @@ function relPathOf(f){return f._relPath||f.webkitRelativePath||f.name}
 // Ordem natural: "2. Aula" antes de "10. Aula", pasta por pasta.
 function naturalSort(a,b){return relPathOf(a).localeCompare(relPathOf(b),undefined,{numeric:true,sensitivity:'base'})}
 
-function addFiles(filesList){
-    for(var i=0;i<filesList.length;i++){
-        var file=filesList[i];
-        var ext=file.name.split('.').pop().toLowerCase();
-        if(['mp4','mov','avi','mkv','webm'].indexOf(ext)===-1){continue}
-        if(file.size>5*1024*1024*1024){continue}
-        // Avoid duplicates (same path inside the course + same size)
-        var exists=false;
-        for(var j=0;j<videoFiles.length;j++){if(relPathOf(videoFiles[j])===relPathOf(file)&&videoFiles[j].size===file.size){exists=true;break}}
-        if(!exists) videoFiles.push(file);
-    }
-    videoFiles.sort(naturalSort);
-    renderFileList();
-}
 
 function removeFile(index){
     videoFiles.splice(index,1);
@@ -451,38 +455,6 @@ function clearFiles(){
     renderFileList();
 }
 
-function renderFileList(){
-    var list=document.getElementById('fileItems');
-    var countEl=document.getElementById('fileCount');
-    var fileListEl=document.getElementById('fileList');
-    var startBtn=document.getElementById('startBtn');
-    countEl.textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'');
-    if(videoFiles.length>0){
-        fileListEl.classList.remove('hidden');
-        startBtn.disabled=false;
-        list.innerHTML='';
-        videoFiles.forEach(function(f,i){
-            var div=document.createElement('div');
-            div.className='flex items-center gap-2 bg-surface-container-low rounded px-2 py-1.5 group';
-            div.innerHTML='<span class="material-symbols-outlined text-primary" style="font-size:14px">movie</span><span class="flex-1 text-[11px] font-label text-on-surface truncate" title="'+relPathOf(f)+'">'+relPathOf(f)+'</span><span class="text-[10px] font-label text-on-surface-variant">'+(f.size/1024/1024).toFixed(1)+'MB</span><button onclick="removeFile('+i+')" class="text-on-surface-variant hover:text-error transition-colors"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>';
-            list.appendChild(div);
-        });
-        document.getElementById('uploadTitle').textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'')+' selecionado'+(videoFiles.length!==1?'s':'');
-        document.getElementById('uploadSubtitle').textContent='Pronto para dublar';
-        document.getElementById('selectFileText').textContent='ADICIONAR MAIS';
-        var iconEl=document.querySelector('#uploadIcon .material-symbols-outlined');
-        iconEl.textContent='task_alt';iconEl.style.color='#00e9bf';
-        iconEl.classList.remove('uploadIcon-pulse');void iconEl.offsetWidth;iconEl.classList.add('uploadIcon-pulse');
-    }else{
-        fileListEl.classList.add('hidden');
-        startBtn.disabled=true;
-        document.getElementById('uploadTitle').textContent='Arraste os videos aqui';
-        document.getElementById('uploadSubtitle').textContent='MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios';
-        document.getElementById('selectFileText').textContent='CLIQUE PARA SELECIONAR';
-        var iconEl=document.querySelector('#uploadIcon .material-symbols-outlined');
-        iconEl.textContent='cloud_upload';iconEl.style.color='';
-    }
-}
 
 // ── TOGGLES ──
 var OPT_ON='opt-btn flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed shadow-[0_0_14px_rgba(0,255,209,0.25)]';
@@ -724,42 +696,6 @@ function sessionFinished(sid,pid,ok,err){
     }
     renderDownloads();
 }
-function renderQueue(){
-    fetch('/api/jobs').then(r=>r.json()).then(data=>{
-        var jobs=data.jobs||[];
-        jobs.forEach(function(j){if(j.status==='done')sessionFinished(j.session_id,j.project_id,j.result==='ok',j.error)});
-        var key=JSON.stringify(jobs.map(function(j){return [j.id,j.status,j.result,Math.round((j.progress||0)*100),j.stage]}));
-        if(key===lastQueueKey)return;
-        lastQueueKey=key;
-        var list=document.getElementById('queueList');
-        document.getElementById('queueCount').textContent=jobs.filter(j=>j.status!=='done').length;
-        if(!jobs.length){list.innerHTML='<div class="text-center py-8 text-on-surface-variant text-xs font-label">Nenhum video na fila</div>';return}
-        list.innerHTML='';
-        jobs.forEach(function(j){
-            var pct=Math.round((j.progress||0)*100);
-            var div=document.createElement('div');
-            if(j.status==='running'){
-                div.className='queue-item bg-surface-container-high rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary';
-                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined animate-spin text-primary" style="font-size:14px">progress_activity</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-primary px-1 py-0.5 rounded bg-primary/10">'+(j.stage||'Processando')+'</span><span class="text-[9px] font-label text-primary neon-glow">'+pct+'%</span></div><div class="w-full h-0.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary rounded-full shimmer" style="width:'+pct+'%"></div></div>';
-            } else if(j.status==='queued'){
-                var pos=0;
-                jobs.forEach(function(jj){if(jj.status==='running')pos++});
-                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-on-surface-variant/30 opacity-60';
-                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-on-surface-variant" style="font-size:14px">schedule</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-on-surface-variant px-1 py-0.5 rounded bg-surface-container">NA FILA</span><span class="text-[9px] font-label text-on-surface-variant">Aguardando...</span></div>';
-            } else if(j.status==='done'&&j.result==='ok'){
-                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-secondary cursor-pointer hover:border-secondary/60 transition-all';
-                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-secondary" style="font-size:14px">check_circle</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-secondary px-1 py-0.5 rounded bg-secondary/10 flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:10px">play_circle</span> ASSISTIR</span><span class="text-[9px] font-label text-secondary">100%</span></div>';
-                div.onclick=function(){loadResults(j.project_id)};
-            } else {
-                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-error opacity-50';
-                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-1.5 border-l-2 border-l-error';
-                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-error" style="font-size:14px">error</span></div><span class="text-[9px] font-label text-error/80" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"></span>';
-                div.lastChild.textContent='FALHOU: '+(j.error||'erro desconhecido');
-            }
-            list.appendChild(div);
-        });
-    }).catch(function(){});
-}
 
 // ── SIDEBAR TABS / DOWNLOADS ──
 var sidebarTab='queue';
@@ -795,44 +731,430 @@ function renderDownloads(){
         drawDownloads();
     }).catch(function(){});
 }
-function drawDownloads(){
-    {
-        var q=document.getElementById('downloadsSearch').value.trim().toLowerCase();
-        var videos=allDownloads.filter(function(v){return !q||(v.rel_path||v.filename).toLowerCase().indexOf(q)!==-1});
-        var key=q+'|'+JSON.stringify(videos.map(function(v){return [v.project_id,v.modified]}));
-        if(key===lastDownloadsKey)return;
-        lastDownloadsKey=key;
-        var list=document.getElementById('downloadsList');
-        shownDownloads=videos;
-        var totalMb=videos.reduce(function(a,v){return a+v.size_mb},0);
-        document.getElementById('downloadAllLabel').textContent=q?('Baixar '+videos.length+' encontrados \u00b7 '+fmtSize(totalMb)):('Baixar todos ('+videos.length+') \u00b7 '+fmtSize(totalMb));
-        document.getElementById('downloadAllBtn').disabled=!videos.length;
-        if(!videos.length){list.innerHTML='<div class="text-center py-8 text-on-surface-variant text-xs font-label">'+(q?'Nada encontrado':'Nenhum video pronto ainda')+'</div>';return}
-        list.innerHTML='';
-        videos.forEach(function(v){
-            var div=document.createElement('div');
-            div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary/50 hover:border-primary transition-all';
-            div.innerHTML=
-                '<div class="flex justify-between items-start gap-2">'+
-                    '<span class="text-[11px] font-label text-on-surface leading-tight cursor-pointer hover:text-primary transition-colors" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="'+(v.rel_path||v.filename)+'">'+(v.rel_path?v.rel_path.replace(/\.[^./]+$/,''):v.filename.replace('_dublado_pt.mp4',''))+'</span>'+
-                '</div>'+
-                '<div class="flex justify-between items-center">'+
-                    '<span class="text-[9px] font-label text-on-surface-variant">'+fmtSize(v.size_mb)+' &middot; '+fmtDate(v.modified)+'</span>'+
-                '</div>'+
-                '<div class="flex items-center gap-2 mt-1">'+
-                    '<button class="flex-1 flex items-center justify-center gap-1 h-7 rounded bg-primary/10 text-primary text-[10px] font-label font-semibold hover:bg-primary/20 transition-colors"><span class="material-symbols-outlined" style="font-size:13px">play_circle</span> ASSISTIR</button>'+
-                    '<a href="'+v.download_url+'" class="flex items-center justify-center h-7 w-7 rounded bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors" title="Baixar"><span class="material-symbols-outlined" style="font-size:15px">download</span></a>'+
-                    '<button class="flex items-center justify-center h-7 w-7 rounded bg-surface-container-high text-on-surface-variant hover:text-error transition-colors" title="Excluir"><span class="material-symbols-outlined" style="font-size:15px">delete</span></button>'+
-                '</div>';
-            div.querySelector('.cursor-pointer').onclick=function(){loadResults(v.project_id)};
-            div.querySelector('button.flex-1').onclick=function(){loadResults(v.project_id)};
-            div.querySelectorAll('button')[1].onclick=function(){
-                if(!confirm('Excluir "'+v.filename+'"? O video dublado sera apagado (o original enviado continua salvo).'))return;
-                fetch('/api/downloads/'+v.project_id,{method:'DELETE'}).then(function(){toast('Video excluido','info');renderDownloads()});
-            };
-            list.appendChild(div);
-        });
+
+// ── PASTAS: revisao ao escolher, fila e prontos agrupados por pasta ──
+var VIDEO_EXT=['mp4','mov','avi','mkv','webm'];
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function natCmp(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'})}
+// "NK101/1. Intro/2. Aula.mp4" -> raiz, modulo, aula
+function splitRel(rel){
+    var p=String(rel||'').split('/');
+    return{root:p.length>1?p[0]:'',module:p.slice(1,-1).join(' / '),lesson:p[p.length-1].replace(/\.[^.]+$/,''),file:p[p.length-1]};
+}
+function fmtDur(sec){
+    if(!sec)return '';
+    var h=Math.floor(sec/3600),m=Math.round((sec%3600)/60);
+    if(m===60){h++;m=0}
+    return h?(h+'h'+(m<10?'0':'')+m):(Math.max(1,m)+' min');
+}
+function leadingNum(name){var m=/^\s*(\d+)/.exec(name);return m?parseInt(m[1],10):null}
+var lastGpu=null;
+fetch('/api/gpu').then(function(r){return r.json()}).then(function(g){if(g.ok)lastGpu=g}).catch(function(){});
+// Quanto tempo a dublagem leva em relacao a duracao do video (medido: 3060 ~0,75).
+function dubRatio(){
+    var mb=lastGpu&&lastGpu.total_mb||12000;
+    return mb<14000?0.75:mb<30000?0.45:0.3;
+}
+
+// ---------- entrada de arquivos ----------
+function addOne(file){
+    for(var j=0;j<videoFiles.length;j++){if(relPathOf(videoFiles[j])===relPathOf(file)&&videoFiles[j].size===file.size)return false}
+    videoFiles.push(file);return true;
+}
+function addFiles(filesList){
+    var loose=[],inFolder=[],ignored={},tooBig=0;
+    for(var i=0;i<filesList.length;i++){
+        var file=filesList[i];
+        var ext=file.name.split('.').pop().toLowerCase();
+        var fromFolder=relPathOf(file).indexOf('/')>0;
+        if(VIDEO_EXT.indexOf(ext)===-1){if(fromFolder)ignored[ext]=(ignored[ext]||0)+1;continue}
+        if(file.size>5*1024*1024*1024){tooBig++;continue}
+        (fromFolder?inFolder:loose).push(file);
     }
+    loose.forEach(addOne);
+    videoFiles.sort(naturalSort);
+    renderFileList();
+    if(inFolder.length)openFolderReview(inFolder,ignored,tooBig);
+    else if(Object.keys(ignored).length&&!loose.length)toast('Nenhum video encontrado nessa pasta','err');
+    else if(tooBig)toast(tooBig+' video(s) com mais de 5 GB foram ignorados','err');
+}
+
+// ---------- janela de revisao da pasta ----------
+var review=null;
+function openFolderReview(files,ignored,tooBig){
+    files.sort(naturalSort);
+    var doneSet={},queuedSet={};
+    (allDownloads||[]).forEach(function(v){if(v.rel_path)doneSet[v.rel_path]=1});
+    (lastJobs||[]).forEach(function(j){if(j.rel_path&&j.status!=='done')queuedSet[j.rel_path]=1});
+    videoFiles.forEach(function(f){queuedSet[relPathOf(f)]=1});
+    var roots={};
+    var items=files.map(function(f){
+        var rel=relPathOf(f),sp=splitRel(rel);roots[sp.root]=1;
+        var already=!!doneSet[rel],inQueue=!!queuedSet[rel];
+        return{file:f,rel:rel,root:sp.root,module:sp.module,lesson:sp.lesson,size:f.size,dur:null,already:already,inQueue:inQueue,include:!(already||inQueue)};
+    });
+    var rootNames=Object.keys(roots).sort(natCmp);
+    var modules=[],byKey={};
+    items.forEach(function(it){
+        var key=(rootNames.length>1?it.root+(it.module?' / ':''):'')+it.module;
+        if(!byKey[key]){byKey[key]={name:key||'Arquivos soltos na pasta',items:[],open:false};modules.push(byKey[key])}
+        byKey[key].items.push(it);
+    });
+    modules.sort(function(a,b){return natCmp(a.name,b.name)});
+    if(modules.length<=2)modules.forEach(function(m){m.open=true});
+    review={title:rootNames.length===1?rootNames[0]:(rootNames.length+' pastas'),items:items,modules:modules,ignored:ignored,tooBig:tooBig,durDone:false};
+    document.getElementById('folderModal').classList.remove('hidden');
+    drawReview();
+    probeDurations(items);
+}
+function closeFolderModal(){review=null;document.getElementById('folderModal').classList.add('hidden')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&review)closeFolderModal()});
+
+function probeDuration(file){
+    return new Promise(function(res){
+        var v=document.createElement('video'),u=URL.createObjectURL(file),done=false;
+        function fin(d){if(done)return;done=true;URL.revokeObjectURL(u);v.removeAttribute('src');try{v.load()}catch(e){}res(d)}
+        v.preload='metadata';v.muted=true;
+        v.onloadedmetadata=function(){fin(isFinite(v.duration)?v.duration:null)};
+        v.onerror=function(){fin(null)};
+        setTimeout(function(){fin(null)},8000);
+        v.src=u;
+    });
+}
+async function probeDurations(items){
+    var idx=0,r=review;
+    async function worker(){while(idx<items.length&&review===r){var it=items[idx++];it.dur=await probeDuration(it.file);scheduleDraw()}}
+    await Promise.all([worker(),worker(),worker(),worker()]);
+    if(review===r){r.durDone=true;drawReview()}
+}
+var drawPending=false;
+function scheduleDraw(){if(drawPending)return;drawPending=true;setTimeout(function(){drawPending=false;if(review)drawReview()},300)}
+
+function reviewChecks(r){
+    var checks=[],inc=r.items.filter(function(i){return i.include});
+    checks.push(['ok',r.items.length+' aula'+(r.items.length!==1?'s':'')+' em '+r.modules.length+' modulo'+(r.modules.length!==1?'s':'')+', na ordem do curso (1, 2, ... 10)']);
+    var ign=Object.keys(r.ignored).map(function(k){return r.ignored[k]+' .'+k}).join(', ');
+    if(ign)checks.push(['info','Ignorados (nao sao video): '+ign]);
+    var already=r.items.filter(function(i){return i.already}).length;
+    if(already)checks.push(['warn',already+' aula'+(already!==1?'s ja estao':' ja esta')+' em Prontos - desmarcada'+(already!==1?'s':'')+' (marque se quiser dublar de novo)']);
+    var queued=r.items.filter(function(i){return i.inQueue}).length;
+    if(queued)checks.push(['warn',queued+' aula'+(queued!==1?'s ja estao':' ja esta')+' na fila ou na lista - desmarcada'+(queued!==1?'s':'')]);
+    if(r.tooBig)checks.push(['warn',r.tooBig+' video'+(r.tooBig!==1?'s':'')+' com mais de 5 GB ignorado'+(r.tooBig!==1?'s':'')]);
+    // Aulas numeradas com buraco na sequencia (ex.: 1, 2, 4): pode faltar arquivo.
+    r.modules.forEach(function(m){
+        var nums=m.items.map(function(i){return leadingNum(i.lesson)});
+        if(nums.some(function(n){return n===null})||nums.length<2)return;
+        var set={},mx=Math.max.apply(null,nums),mn=Math.min.apply(null,nums),missing=[];
+        nums.forEach(function(n){set[n]=1});
+        for(var n=mn;n<=mx;n++)if(!set[n])missing.push(n);
+        if(missing.length&&missing.length<=5)checks.push(['warn','"'+m.name+'": parece faltar a aula '+missing.join(', ')]);
+    });
+    var unread=r.items.filter(function(i){return i.dur===null}).length;
+    if(r.durDone&&unread)checks.push(['warn',unread+' video'+(unread!==1?'s':'')+' sem duracao legivel (podem estar corrompidos)']);
+    if(!inc.length)checks.push(['warn','Nenhuma aula marcada']);
+    return checks;
+}
+var CHECK_ICON={ok:['check_circle','#00e9bf'],info:['info','#67d7ff'],warn:['warning','#ffb86b']};
+function drawReview(){
+    var r=review;if(!r)return;
+    var inc=r.items.filter(function(i){return i.include});
+    var size=inc.reduce(function(a,i){return a+i.size},0)/1024/1024;
+    var known=inc.filter(function(i){return i.dur}),dur=known.reduce(function(a,i){return a+i.dur},0);
+    var durTxt=r.durDone?fmtDur(dur):(known.length?'~'+fmtDur(dur/known.length*inc.length):'lendo...');
+    var estTxt=dur?('~'+fmtDur((r.durDone?dur:dur/known.length*inc.length)*dubRatio())):'...';
+    document.getElementById('fmTitle').textContent=r.title;
+    document.getElementById('fmStats').innerHTML=
+        chip('movie',inc.length+' de '+r.items.length+' aulas')+chip('folder',r.modules.length+' modulo'+(r.modules.length!==1?'s':''))+
+        chip('hard_drive',fmtSize(size))+chip('schedule',durTxt+' de aula')+chip('bolt',estTxt+' pra dublar',true);
+    document.getElementById('fmChecks').innerHTML=reviewChecks(r).map(function(c){
+        var ic=CHECK_ICON[c[0]];
+        return '<div class="flex items-start gap-2 text-[11px]"><span class="material-symbols-outlined" style="font-size:15px;color:'+ic[1]+";font-variation-settings:'FILL' 1\">"+ic[0]+'</span><span class="flex-1">'+esc(c[1])+'</span></div>';
+    }).join('');
+    var tree=document.getElementById('fmTree'),scroll=tree.scrollTop;
+    tree.innerHTML=r.modules.map(function(m,mi){
+        var n=m.items.filter(function(i){return i.include}).length;
+        var md=m.items.reduce(function(a,i){return a+(i.dur||0)},0);
+        var state=n===0?'':(n===m.items.length?'checked':'data-indet="1"');
+        var rows=m.open?m.items.map(function(it,ii){
+            var badge=it.already?'<span class="text-[9px] px-1 rounded bg-secondary/15 text-secondary">ja dublada</span>':(it.inQueue?'<span class="text-[9px] px-1 rounded bg-primary/10 text-primary">na fila</span>':'');
+            return '<label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-surface-container cursor-pointer'+(it.include?'':' opacity-50')+'">'+
+                '<input type="checkbox" data-act="item" data-m="'+mi+'" data-i="'+ii+'" '+(it.include?'checked':'')+' class="accent-[#00e9bf]"/>'+
+                '<span class="flex-1 text-[11px] truncate" title="'+esc(it.rel)+'">'+esc(it.lesson)+'</span>'+badge+
+                '<span class="text-[10px] font-label text-on-surface-variant w-12 text-right">'+(it.dur?fmtTime(it.dur):'')+'</span>'+
+                '<span class="text-[10px] font-label text-on-surface-variant w-14 text-right">'+fmtSize(it.size/1024/1024)+'</span></label>';
+        }).join(''):'';
+        return '<div class="rounded-lg bg-surface-container-low">'+
+            '<div class="flex items-center gap-2 px-2 py-1.5">'+
+            '<button data-act="open" data-m="'+mi+'" class="ctrl-btn !p-0"><span class="material-symbols-outlined" style="font-size:18px">'+(m.open?'expand_more':'chevron_right')+'</span></button>'+
+            '<input type="checkbox" data-act="mod" data-m="'+mi+'" '+state+' class="accent-[#00e9bf]"/>'+
+            '<span class="material-symbols-outlined text-primary" style="font-size:16px">folder</span>'+
+            '<span data-act="open" data-m="'+mi+'" class="flex-1 text-xs font-semibold truncate cursor-pointer" title="'+esc(m.name)+'">'+esc(m.name)+'</span>'+
+            '<span class="text-[10px] font-label text-on-surface-variant">'+n+'/'+m.items.length+(md?' · '+fmtDur(md):'')+'</span></div>'+
+            (rows?'<div class="pb-1 pl-6 pr-1">'+rows+'</div>':'')+'</div>';
+    }).join('');
+    tree.querySelectorAll('[data-indet]').forEach(function(cb){cb.indeterminate=true});
+    tree.scrollTop=scroll;
+    document.getElementById('fmAdd').disabled=!inc.length;
+    document.getElementById('fmStart').disabled=!inc.length;
+    document.getElementById('fmStartLabel').textContent='Dublar '+inc.length+' aula'+(inc.length!==1?'s':'')+' agora';
+}
+function chip(icon,text,accent){
+    return '<span class="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[10px] font-label '+(accent?'bg-primary/10 text-primary':'bg-surface-container-high text-on-surface')+'"><span class="material-symbols-outlined" style="font-size:13px">'+icon+'</span>'+esc(text)+'</span>';
+}
+document.getElementById('fmTree').addEventListener('click',function(e){
+    var el=e.target.closest('[data-act]');if(!el||!review)return;
+    var m=review.modules[+el.getAttribute('data-m')],act=el.getAttribute('data-act');
+    if(act==='open'){e.preventDefault();m.open=!m.open;drawReview()}
+    else if(act==='mod'){var on=m.items.some(function(i){return !i.include});m.items.forEach(function(i){i.include=on});drawReview()}
+    else if(act==='item'){var it=m.items[+el.getAttribute('data-i')];it.include=el.checked;drawReview()}
+});
+function confirmReview(startNow){
+    if(!review)return;
+    var inc=review.items.filter(function(i){return i.include}),title=review.title,added=0;
+    inc.forEach(function(i){if(addOne(i.file))added++});
+    videoFiles.sort(naturalSort);renderFileList();closeFolderModal();
+    toast(title+': '+added+' aula'+(added!==1?'s':'')+' adicionada'+(added!==1?'s':''),'ok');
+    if(startNow&&added)document.getElementById('startBtn').click();
+}
+
+// ---------- lista antes de enviar (agrupada por pasta) ----------
+function renderFileList(){
+    var list=document.getElementById('fileItems');
+    var fileListEl=document.getElementById('fileList');
+    var startBtn=document.getElementById('startBtn');
+    document.getElementById('fileCount').textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'');
+    var iconEl=document.querySelector('#uploadIcon .material-symbols-outlined');
+    if(!videoFiles.length){
+        fileListEl.classList.add('hidden');startBtn.disabled=true;
+        document.getElementById('uploadTitle').textContent='Arraste os videos ou a pasta do curso aqui';
+        document.getElementById('uploadSubtitle').textContent='MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios';
+        document.getElementById('selectFileText').textContent='CLIQUE PARA SELECIONAR';
+        iconEl.textContent='cloud_upload';iconEl.style.color='';
+        return;
+    }
+    fileListEl.classList.remove('hidden');startBtn.disabled=false;
+    list.innerHTML='';
+    var groups={},order=[];
+    videoFiles.forEach(function(f,i){
+        var root=splitRel(relPathOf(f)).root;
+        var key=root?('d:'+root):('f:'+i);
+        if(!groups[key]){groups[key]={root:root,files:[],idx:[]};order.push(key)}
+        groups[key].files.push(f);groups[key].idx.push(i);
+    });
+    order.forEach(function(key){
+        var g=groups[key],div=document.createElement('div');
+        div.className='flex items-center gap-2 bg-surface-container-low rounded px-2 py-1.5 group';
+        var mb=g.files.reduce(function(a,f){return a+f.size},0)/1024/1024;
+        if(g.root){
+            var mods={};g.files.forEach(function(f){mods[splitRel(relPathOf(f)).module]=1});
+            div.innerHTML='<span class="material-symbols-outlined text-primary" style="font-size:15px">folder</span><span class="flex-1 text-[11px] font-label text-on-surface truncate font-semibold" title="'+esc(g.root)+'">'+esc(g.root)+'</span><span class="text-[10px] font-label text-on-surface-variant">'+g.files.length+' aulas · '+Object.keys(mods).length+' mod · '+fmtSize(mb)+'</span><button class="text-on-surface-variant hover:text-error transition-colors" title="Tirar a pasta"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>';
+            div.querySelector('button').onclick=function(){videoFiles=videoFiles.filter(function(f){return splitRel(relPathOf(f)).root!==g.root});renderFileList()};
+        }else{
+            var f=g.files[0];
+            div.innerHTML='<span class="material-symbols-outlined text-primary" style="font-size:14px">movie</span><span class="flex-1 text-[11px] font-label text-on-surface truncate" title="'+esc(f.name)+'">'+esc(f.name)+'</span><span class="text-[10px] font-label text-on-surface-variant">'+fmtSize(mb)+'</span><button class="text-on-surface-variant hover:text-error transition-colors"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>';
+            div.querySelector('button').onclick=function(){removeFile(g.idx[0])};
+        }
+        list.appendChild(div);
+    });
+    document.getElementById('uploadTitle').textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'')+' selecionado'+(videoFiles.length!==1?'s':'');
+    document.getElementById('uploadSubtitle').textContent='Pronto para dublar';
+    document.getElementById('selectFileText').textContent='ADICIONAR MAIS';
+    iconEl.textContent='task_alt';iconEl.style.color='#00e9bf';
+    iconEl.classList.remove('uploadIcon-pulse');void iconEl.offsetWidth;iconEl.classList.add('uploadIcon-pulse');
+}
+
+// ---------- fila agrupada por pasta ----------
+var lastJobs=[],uploadPending=[],queueOpen={};
+function jobCard(j){
+    var pct=Math.round((j.progress||0)*100),div=document.createElement('div'),name=esc(j.filename||j.project_id);
+    if(j.status==='running'){
+        div.className='queue-item bg-surface-container-high rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary';
+        div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+name+'</span><span class="material-symbols-outlined animate-spin text-primary" style="font-size:14px">progress_activity</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-primary px-1 py-0.5 rounded bg-primary/10">'+esc(j.stage||'Processando')+'</span><span class="text-[9px] font-label text-primary neon-glow">'+pct+'%</span></div><div class="w-full h-0.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary rounded-full shimmer" style="width:'+pct+'%"></div></div>';
+    }else if(j.status==='queued'){
+        div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-on-surface-variant/30 opacity-60';
+        div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+name+'</span><span class="material-symbols-outlined text-on-surface-variant" style="font-size:14px">schedule</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-on-surface-variant px-1 py-0.5 rounded bg-surface-container">NA FILA</span><span class="text-[9px] font-label text-on-surface-variant">Aguardando...</span></div>';
+    }else if(j.status==='done'&&j.result==='ok'){
+        div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-secondary cursor-pointer hover:border-secondary/60 transition-all';
+        div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+name+'</span><span class="material-symbols-outlined text-secondary" style="font-size:14px">check_circle</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-secondary px-1 py-0.5 rounded bg-secondary/10 flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:10px">play_circle</span> ASSISTIR</span><span class="text-[9px] font-label text-secondary">100%</span></div>';
+        div.onclick=function(){loadResults(j.project_id)};
+    }else{
+        div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-1.5 border-l-2 border-l-error';
+        div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+name+'</span><span class="material-symbols-outlined text-error" style="font-size:14px">error</span></div><span class="text-[9px] font-label text-error/80" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden"></span>';
+        div.lastChild.textContent='FALHOU: '+(j.error||'erro desconhecido');
+    }
+    return div;
+}
+var Q_ICON={done:['check_circle','text-secondary','FILL'],running:['progress_activity','text-primary animate-spin',''],queued:['schedule','text-on-surface-variant',''],error:['error','text-error','FILL'],upload:['upload','text-on-surface-variant','']};
+function lessonState(j){return j.status==='running'?'running':j.status==='queued'?'queued':(j.result==='ok'?'done':'error')}
+function folderCard(root,items){
+    // items: [{rel, state, job?}]
+    var c={done:0,running:0,queued:0,error:0,upload:0},run=null;
+    items.forEach(function(it){c[it.state]++;if(it.state==='running')run=it.job});
+    var total=items.length,frac=(c.done+c.error+(run?(run.progress||0):0))/Math.max(total,1);
+    var finished=!c.running&&!c.queued&&!c.upload;
+    var line=finished?(c.error?(c.done+' prontas · '+c.error+' com erro'):'Pasta concluida'):
+        (run?('Dublando: '+splitRel(run.rel_path).lesson+' · '+Math.round((run.progress||0)*100)+'%'):(c.upload?('Enviando: faltam '+c.upload):'Na fila'));
+    var open=!!queueOpen[root];
+    var div=document.createElement('div');
+    div.className='queue-item rounded-lg p-3 flex flex-col gap-2 border-l-2 '+(finished?(c.error?'bg-surface-container border-l-error':'bg-surface-container border-l-secondary'):'bg-surface-container-high border-l-primary');
+    div.innerHTML='<div class="flex items-center gap-2 cursor-pointer" data-q="toggle">'+
+        '<span class="material-symbols-outlined text-primary" style="font-size:18px;font-variation-settings:\'FILL\' 1">'+(open?'folder_open':'folder')+'</span>'+
+        '<span class="flex-1 min-w-0"><span class="block text-[11px] font-label font-semibold text-on-surface truncate" title="'+esc(root)+'">'+esc(root)+'</span>'+
+        '<span class="block text-[9px] font-label '+(finished?'text-secondary':'text-primary')+' truncate">'+esc(line)+'</span></span>'+
+        '<span class="text-[10px] font-label text-on-surface-variant whitespace-nowrap">'+c.done+'/'+total+'</span>'+
+        (c.done?'<button data-q="zip" class="ctrl-btn !p-0.5" title="Baixar as prontas desta pasta (.zip)"><span class="material-symbols-outlined" style="font-size:16px">download</span></button>':'')+
+        '<span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">'+(open?'expand_less':'expand_more')+'</span></div>'+
+        '<div class="w-full h-1 bg-surface-container rounded-full overflow-hidden"><div class="h-full '+(finished?'bg-secondary':'bg-primary shimmer')+' rounded-full transition-all" style="width:'+Math.round(frac*100)+'%"></div></div>';
+    if(open){
+        var body=document.createElement('div');body.className='flex flex-col gap-0.5 max-h-80 overflow-y-auto pr-1';
+        var lastMod=null;
+        items.forEach(function(it){
+            var sp=splitRel(it.rel);
+            if(sp.module!==lastMod){lastMod=sp.module;if(sp.module){var h=document.createElement('div');h.className='text-[9px] font-label font-bold uppercase tracking-wider text-on-surface-variant mt-1.5 truncate';h.textContent=sp.module;body.appendChild(h)}}
+            var ic=Q_ICON[it.state],row=document.createElement('div');
+            row.className='flex items-center gap-1.5 text-[10px] rounded px-1 py-0.5'+(it.state==='done'?' cursor-pointer hover:bg-surface-container-highest':'');
+            row.innerHTML='<span class="material-symbols-outlined '+ic[1]+'" style="font-size:13px;'+(ic[2]?"font-variation-settings:'FILL' 1":'')+'">'+ic[0]+'</span><span class="flex-1 truncate"></span>'+(it.state==='running'?'<span class="text-primary font-label">'+Math.round((it.job.progress||0)*100)+'%</span>':'');
+            row.children[1].textContent=sp.lesson;
+            if(it.state==='error')row.title='FALHOU: '+(it.job.error||'erro');
+            if(it.state==='done')row.onclick=function(){loadResults(it.job.project_id)};
+            body.appendChild(row);
+        });
+        div.appendChild(body);
+    }
+    div.querySelector('[data-q="toggle"]').onclick=function(e){
+        if(e.target.closest('[data-q="zip"]')){
+            var ids=items.filter(function(i){return i.state==='done'}).map(function(i){return i.job.project_id});
+            toast('Preparando o .zip de '+root+' ('+ids.length+' aulas)...','info');
+            var a=document.createElement('a');a.href='/api/downloads/zip?name='+encodeURIComponent(root)+'&ids='+encodeURIComponent(ids.join(','));a.click();
+            return;
+        }
+        queueOpen[root]=!queueOpen[root];lastQueueKey='';drawQueue();
+    };
+    return div;
+}
+function renderQueue(){
+    fetch('/api/jobs').then(function(r){return r.json()}).then(function(data){
+        lastJobs=data.jobs||[];
+        lastJobs.forEach(function(j){if(j.status==='done')sessionFinished(j.session_id,j.project_id,j.result==='ok',j.error)});
+        drawQueue();
+    }).catch(function(){});
+}
+function drawQueue(){
+    var jobs=lastJobs;
+    var key=JSON.stringify([jobs.map(function(j){return [j.id,j.status,j.result,Math.round((j.progress||0)*100),j.stage]}),uploadPending.length,queueOpen]);
+    if(key===lastQueueKey)return;
+    lastQueueKey=key;
+    var list=document.getElementById('queueList');
+    document.getElementById('queueCount').textContent=jobs.filter(function(j){return j.status!=='done'}).length+uploadPending.length;
+    if(!jobs.length&&!uploadPending.length){list.innerHTML='<div class="text-center py-8 text-on-surface-variant text-xs font-label">Nenhum video na fila</div>';return}
+    // Agrupa pela pasta raiz; videos soltos continuam como antes.
+    var order=[],groups={};
+    function slot(root){if(!groups[root]){groups[root]=[];order.push({root:root})}return groups[root]}
+    jobs.forEach(function(j){
+        var root=j.rel_path?splitRel(j.rel_path).root:'';
+        if(root)slot(root).push({rel:j.rel_path,state:lessonState(j),job:j});
+        else order.push({job:j});
+    });
+    uploadPending.forEach(function(p){var root=splitRel(p.rel).root;if(root)slot(root).push({rel:p.rel,state:'upload'})});
+    list.innerHTML='';
+    order.forEach(function(o){
+        if(o.job){list.appendChild(jobCard(o.job));return}
+        var items=groups[o.root].slice().sort(function(a,b){return natCmp(a.rel,b.rel)});
+        list.appendChild(folderCard(o.root,items));
+    });
+}
+
+// ---------- prontos agrupados por pasta ----------
+var dlOpen={};
+function downloadCard(v){
+    var div=document.createElement('div');
+    div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary/50 hover:border-primary transition-all';
+    div.innerHTML=
+        '<div class="flex justify-between items-start gap-2"><span class="text-[11px] font-label text-on-surface leading-tight cursor-pointer hover:text-primary transition-colors" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="'+esc(v.filename)+'">'+esc(v.filename.replace('_dublado_pt.mp4',''))+'</span></div>'+
+        '<div class="flex justify-between items-center"><span class="text-[9px] font-label text-on-surface-variant">'+fmtSize(v.size_mb)+' &middot; '+fmtDate(v.modified)+'</span></div>'+
+        '<div class="flex items-center gap-2 mt-1">'+
+            '<button data-d="play" class="flex-1 flex items-center justify-center gap-1 h-7 rounded bg-primary/10 text-primary text-[10px] font-label font-semibold hover:bg-primary/20 transition-colors"><span class="material-symbols-outlined" style="font-size:13px">play_circle</span> ASSISTIR</button>'+
+            '<a href="'+v.download_url+'" class="flex items-center justify-center h-7 w-7 rounded bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors" title="Baixar"><span class="material-symbols-outlined" style="font-size:15px">download</span></a>'+
+            '<button data-d="del" class="flex items-center justify-center h-7 w-7 rounded bg-surface-container-high text-on-surface-variant hover:text-error transition-colors" title="Excluir"><span class="material-symbols-outlined" style="font-size:15px">delete</span></button>'+
+        '</div>';
+    div.querySelector('.cursor-pointer').onclick=function(){loadResults(v.project_id)};
+    div.querySelector('[data-d="play"]').onclick=function(){loadResults(v.project_id)};
+    div.querySelector('[data-d="del"]').onclick=function(){deleteDownload(v)};
+    return div;
+}
+function deleteDownload(v){
+    if(!confirm('Excluir "'+(v.rel_path||v.filename)+'"? O video dublado sera apagado (o original enviado continua salvo).'))return;
+    fetch('/api/downloads/'+v.project_id,{method:'DELETE'}).then(function(){toast('Video excluido','info');renderDownloads()});
+}
+function zipLink(name,vids){
+    toast('Preparando o .zip de '+name+' ('+vids.length+' aulas)...','info');
+    var a=document.createElement('a');a.href='/api/downloads/zip?name='+encodeURIComponent(name)+'&ids='+encodeURIComponent(vids.map(function(v){return v.project_id}).join(','));a.click();
+}
+function folderDownloadCard(root,vids,searching){
+    vids=vids.slice().sort(function(a,b){return natCmp(a.rel_path,b.rel_path)});
+    var open=searching||!!dlOpen[root];
+    var mb=vids.reduce(function(a,v){return a+v.size_mb},0);
+    var div=document.createElement('div');
+    div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-secondary';
+    div.innerHTML='<div class="flex items-center gap-2 cursor-pointer" data-f="toggle">'+
+        '<span class="material-symbols-outlined text-secondary" style="font-size:18px;font-variation-settings:\'FILL\' 1">'+(open?'folder_open':'folder')+'</span>'+
+        '<span class="flex-1 min-w-0"><span class="block text-[11px] font-label font-semibold text-on-surface truncate" title="'+esc(root)+'">'+esc(root)+'</span>'+
+        '<span class="block text-[9px] font-label text-on-surface-variant">'+vids.length+' aula'+(vids.length!==1?'s':'')+' · '+fmtSize(mb)+'</span></span>'+
+        '<span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">'+(open?'expand_less':'expand_more')+'</span></div>'+
+        '<button data-f="zip" class="w-full h-7 rounded bg-secondary/10 text-secondary text-[10px] font-label font-semibold hover:bg-secondary/20 transition-colors flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px">folder_zip</span>Baixar a pasta (.zip)</button>';
+    div.querySelector('[data-f="toggle"]').onclick=function(){dlOpen[root]=!dlOpen[root];lastDownloadsKey='';drawDownloads()};
+    div.querySelector('[data-f="zip"]').onclick=function(){zipLink(root,vids)};
+    if(open){
+        var body=document.createElement('div');body.className='flex flex-col gap-0.5 max-h-96 overflow-y-auto pr-1';
+        var mods={},modOrder=[];
+        vids.forEach(function(v){var m=splitRel(v.rel_path).module;if(!mods[m]){mods[m]=[];modOrder.push(m)}mods[m].push(v)});
+        modOrder.forEach(function(m){
+            if(m){
+                var h=document.createElement('div');h.className='flex items-center gap-1 mt-1.5';
+                h.innerHTML='<span class="flex-1 text-[9px] font-label font-bold uppercase tracking-wider text-on-surface-variant truncate"></span><button class="ctrl-btn !p-0" title="Baixar este modulo (.zip)"><span class="material-symbols-outlined" style="font-size:14px">download</span></button>';
+                h.firstChild.textContent=m;h.firstChild.title=m;
+                h.querySelector('button').onclick=function(){zipLink(root+' - '+m.split(' / ').pop(),mods[m])};
+                body.appendChild(h);
+            }
+            mods[m].forEach(function(v){
+                var row=document.createElement('div');
+                row.className='flex items-center gap-1 text-[10px] rounded px-1 py-0.5 hover:bg-surface-container-highest group/row';
+                row.innerHTML='<button data-r="play" class="ctrl-btn !p-0 text-primary" title="Assistir"><span class="material-symbols-outlined" style="font-size:15px">play_circle</span></button>'+
+                    '<span class="flex-1 truncate cursor-pointer" data-r="play"></span>'+
+                    '<span class="text-[9px] font-label text-on-surface-variant">'+fmtSize(v.size_mb)+'</span>'+
+                    '<a href="'+v.download_url+'" class="ctrl-btn !p-0" title="Baixar"><span class="material-symbols-outlined" style="font-size:14px">download</span></a>'+
+                    '<button data-r="del" class="ctrl-btn !p-0 hover:!text-error" title="Excluir"><span class="material-symbols-outlined" style="font-size:14px">delete</span></button>';
+                row.children[1].textContent=splitRel(v.rel_path).lesson;row.children[1].title=v.rel_path;
+                row.querySelectorAll('[data-r="play"]').forEach(function(b){b.onclick=function(){loadResults(v.project_id)}});
+                row.querySelector('[data-r="del"]').onclick=function(){deleteDownload(v)};
+                body.appendChild(row);
+            });
+        });
+        div.appendChild(body);
+    }
+    return div;
+}
+function drawDownloads(){
+    var q=document.getElementById('downloadsSearch').value.trim().toLowerCase();
+    var videos=allDownloads.filter(function(v){return !q||(v.rel_path||v.filename).toLowerCase().indexOf(q)!==-1});
+    var key=q+'|'+JSON.stringify([videos.map(function(v){return [v.project_id,v.modified]}),dlOpen]);
+    if(key===lastDownloadsKey)return;
+    lastDownloadsKey=key;
+    var list=document.getElementById('downloadsList');
+    shownDownloads=videos;
+    var totalMb=videos.reduce(function(a,v){return a+v.size_mb},0);
+    document.getElementById('downloadAllLabel').textContent=q?('Baixar '+videos.length+' encontrados · '+fmtSize(totalMb)):('Baixar todos ('+videos.length+') · '+fmtSize(totalMb));
+    document.getElementById('downloadAllBtn').disabled=!videos.length;
+    if(!videos.length){list.innerHTML='<div class="text-center py-8 text-on-surface-variant text-xs font-label">'+(q?'Nada encontrado':'Nenhum video pronto ainda')+'</div>';return}
+    list.innerHTML='';
+    // Pastas primeiro (por nome), depois os videos soltos (mais novos primeiro).
+    var groups={},roots=[],loose=[];
+    videos.forEach(function(v){
+        var root=v.rel_path?splitRel(v.rel_path).root:'';
+        if(root){if(!groups[root]){groups[root]=[];roots.push(root)}groups[root].push(v)}else loose.push(v);
+    });
+    roots.sort(natCmp).forEach(function(r){list.appendChild(folderDownloadCard(r,groups[r],!!q))});
+    loose.forEach(function(v){list.appendChild(downloadCard(v))});
 }
 
 // ── CHUNKED UPLOAD ──
@@ -904,6 +1226,9 @@ document.getElementById('startBtn').addEventListener('click',async function(){
     // Clear file list immediately
     videoFiles=[];
     renderFileList();
+    // Aulas de pastas aparecem na fila (dentro da pasta) como "enviando" ate subirem.
+    uploadPending=uploadPending.concat(filesToSend.filter(function(f){return relPathOf(f).indexOf('/')>0}).map(function(f){return{rel:relPathOf(f)}}));
+    lastQueueKey='';drawQueue();setSidebarTab('queue');
 
     btn.disabled=true;
     btn.innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> Enviando...';
@@ -911,6 +1236,7 @@ document.getElementById('startBtn').addEventListener('click',async function(){
 
     for(var i=0;i<filesToSend.length;i++){
         var file=filesToSend[i];
+        if(i>0){var prevRel=relPathOf(filesToSend[i-1]);uploadPending=uploadPending.filter(function(p,k,arr){return !(p.rel===prevRel&&arr.findIndex(function(x){return x.rel===prevRel})===k)});lastQueueKey='';renderQueue()}
         try{
             var up=await uploadInChunks(file,i,filesToSend.length);
             if(!up||up.error){console.error('Upload error:',up&&up.error);toast(file.name+': '+((up&&up.error)||'falha no upload'),'err');continue}
@@ -936,7 +1262,8 @@ document.getElementById('startBtn').addEventListener('click',async function(){
         }
     }
 
-    renderQueue();
+    if(filesToSend.length){var lastRel=relPathOf(filesToSend[filesToSend.length-1]);uploadPending=uploadPending.filter(function(p,k,arr){return !(p.rel===lastRel&&arr.findIndex(function(x){return x.rel===lastRel})===k)})}
+    lastQueueKey='';renderQueue();
     setHeaderStatus('Na fila','#00bdeb','rgba(0,189,235,0.1)');
     btn.disabled=false;
     btn.innerHTML='<span class="material-symbols-outlined" style="font-variation-settings:\'FILL\' 1,\'wght\' 400">bolt</span> Iniciar Dublagem';

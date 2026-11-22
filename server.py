@@ -819,8 +819,11 @@ def download_zip():
         yield sink.pop()
 
     stamp = time.strftime("%Y-%m-%d")
+    # Zip de uma pasta/módulo: leva o nome dela ("NK101 (dublado).zip").
+    label = _safe_rel_path(request.args.get("name", "")).replace("/", " - ")[:120]
+    zip_name = f"{label} (dublado).zip" if label else f"videos_dublados_{stamp}.zip"
     return Response(generate(), mimetype="application/zip", headers={
-        "Content-Disposition": f"attachment; filename=\"videos_dublados_{stamp}.zip\"",
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(zip_name)}",
     })
 
 
