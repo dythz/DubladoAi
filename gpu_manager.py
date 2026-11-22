@@ -39,14 +39,17 @@ class GPUManager:
                  "--format=csv,noheader,nounits"],
                 capture_output=True, text=True, errors='replace', timeout=10,
             )
-            parts = result.stdout.strip().split(", ")
+            # Pods com várias GPUs listam uma por linha: usa a primeira (cuda:0).
+            parts = result.stdout.strip().splitlines()[0].split(", ")
             used = int(parts[0])
             total = int(parts[1])
             return {"used_mb": used, "total_mb": total, "free_mb": total - used}
         except Exception:
-            used = torch.cuda.memory_allocated() // (1024 * 1024)
-            reserved = torch.cuda.memory_reserved() // (1024 * 1024)
-            return {"used_mb": used, "total_mb": 12288, "free_mb": 12288 - used}
+            # Sem nvidia-smi: pergunta direto pro driver (vale pra qualquer placa).
+            free_b, total_b = torch.cuda.mem_get_info()
+            total = total_b // (1024 * 1024)
+            free = free_b // (1024 * 1024)
+            return {"used_mb": total - free, "total_mb": total, "free_mb": free}
 
     @classmethod
     def get_vram_fraction(cls) -> float:

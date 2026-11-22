@@ -16,9 +16,9 @@ python3 -c "
 import os
 os.environ['HF_HUB_DISABLE_SYMLINKS'] = '1'
 
-print('[1/4] Baixando Whisper large-v3...')
+print('[1/4] Baixando Whisper large-v3-turbo...')
 from faster_whisper import WhisperModel
-WhisperModel('large-v3', device='cuda', compute_type='int8_float16')
+WhisperModel('large-v3-turbo', device='cuda', compute_type='float16', download_root='/app/data/models/whisper')
 print('  OK')
 
 print('[2/4] Baixando Demucs htdemucs...')
@@ -42,3 +42,8 @@ echo ""
 echo "========================================="
 echo "  Todos os modelos baixados com sucesso"
 echo "========================================="
+
+# Perfil da placa detectado sozinho (config.py -> detect_profile)
+export DUB_PROFILE=auto
+echo "Iniciando o servidor na porta 5000..."
+exec python3 /app/server.py

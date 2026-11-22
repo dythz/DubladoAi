@@ -62,6 +62,11 @@ _STAGE_MODELS = {
 _ALWAYS_WARM = {"qwen3-tts", "qwen3-accent"}
 
 
+def _is_oom(error) -> bool:
+    msg = str(error or "").lower()
+    return "out of memory" in msg or "outofmemory" in msg or "cublas_status_alloc_failed" in msg
+
+
 def run(project_id: str, session_id: str, config_overrides: dict, event_queue) -> None:
     """Execute the dubbing pipeline. Called in a subprocess by JobQueue."""
 
@@ -136,6 +141,28 @@ def run(project_id: str, session_id: str, config_overrides: dict, event_queue) -
 
             stage_fn = STAGE_FUNCTIONS[stage_name]
             result = stage_fn(project_dir, config, progress=_progress)
+
+            # Plano B: se a etapa estourou a VRAM, libera todos os outros modelos,
+            # reduz os lotes do TTS e tenta a etapa de novo uma vez.
+            if not result.success and _is_oom(result.error):
+                dub_log = logging.getLogger("dubbing")
+                dub_log.warning(f"[GPU] Sem VRAM em {stage_name}; liberando modelos e tentando de novo")
+                from models import model_cache
+                model_cache.keep_only(_STAGE_MODELS.get(stage_name, set()))
+                try:
+                    import gc
+                    import torch
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                config.EVICT_IDLE_MODELS = True
+                config.OLLAMA_UNLOAD_AFTER = True
+                config.QWEN_BATCH_CHARS = max(360, config.QWEN_BATCH_CHARS // 4)
+                config.QWEN_BATCH_SIZE = max(1, config.QWEN_BATCH_SIZE // 2)
+                state.mark_running(stage_name)
+                result = stage_fn(project_dir, config, progress=_progress)
 
             if result.success:
                 # Guard: transcribe must produce at least 1 cue or everything downstream is wasted

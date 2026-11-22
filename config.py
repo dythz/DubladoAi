@@ -144,12 +144,20 @@ class Config:
     reference_language: str = ""
 
     def __post_init__(self):
-        profile = os.environ.get("DUB_PROFILE", "").strip().lower()
-        if profile:
-            if profile not in PROFILES:
-                raise ValueError(f"Unknown DUB_PROFILE '{profile}'. Options: {', '.join(PROFILES)}")
-            for key, val in PROFILES[profile].items():
-                setattr(self, key, val)
+        # DUB_PROFILE vazio ou "auto" = detecta a placa sozinho. Um nome de
+        # PROFILES (ex.: "rtx3060") força aquele perfil.
+        profile = os.environ.get("DUB_PROFILE", "").strip().lower() or "auto"
+        if profile == "auto":
+            profile, vram_mb, gpu_name = detect_profile()
+            if vram_mb:
+                self.MAX_VRAM_MB = max(vram_mb - 512, 1024)
+            _log_profile_once(profile, gpu_name, vram_mb, auto=True)
+        elif profile not in PROFILES:
+            raise ValueError(f"Unknown DUB_PROFILE '{profile}'. Options: auto, {', '.join(PROFILES)}")
+        else:
+            _log_profile_once(profile, None, None, auto=False)
+        for key, val in PROFILES[profile].items():
+            setattr(self, key, val)
 
     def ensure_dirs(self):
         self.PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -176,4 +184,81 @@ PROFILES: dict[str, dict] = {
         # A 7-8B Ollama model takes ~5GB — free it before TTS loads.
         "OLLAMA_UNLOAD_AFTER": True,
     },
+    # 16-24GB (RTX 4080/4090/3090, A5000, L4). Whisper + Demucs + Opus-MT +
+    # Qwen cabem juntos, então nada é descarregado entre etapas (sem recarregar
+    # modelo = mais rápido). Ollama ainda sai antes do TTS por segurança.
+    "gpu24": {
+        "EVICT_IDLE_MODELS": False,
+        "QWEN_BATCH_CHARS": 2000,
+        "WHISPER_COMPUTE_TYPE": "float16",
+        "WHISPER_BEAM_SIZE": 1,
+        "OLLAMA_UNLOAD_AFTER": True,
+    },
+    # 32GB ou mais (RTX 5090, A6000, L40S, RTX 6000 Ada, A100, H100...).
+    # Tudo fica carregado o tempo todo, inclusive o Ollama.
+    "gpu48": {
+        "EVICT_IDLE_MODELS": False,
+        "QWEN_BATCH_CHARS": 10000,
+        "WHISPER_COMPUTE_TYPE": "float16",
+        "WHISPER_BEAM_SIZE": 1,
+        "OLLAMA_UNLOAD_AFTER": False,
+    },
+    # Sem GPU NVIDIA: roda na CPU (muito lento, só pra não quebrar).
+    "cpu": {
+        "DEVICE": "cpu",
+        "WHISPER_DEVICE": "cpu",
+        "WHISPER_COMPUTE_TYPE": "int8",
+        "WHISPER_BEAM_SIZE": 1,
+        "TRANSLATION_DEVICE": "cpu",
+        "QWEN_BACKEND": "transformers",
+        "QWEN_BATCH_CHARS": 360,
+        "EVICT_IDLE_MODELS": True,
+    },
 }
+
+
+_detected: tuple | None = None
+_logged = False
+
+
+def detect_profile() -> tuple[str, int, str]:
+    """Olha a GPU 0 e escolhe o perfil pela VRAM. Retorna (perfil, vram_mb, nome).
+    Resultado guardado: Config() é criado várias vezes por processo."""
+    global _detected
+    if _detected is not None:
+        return _detected
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            _detected = ("cpu", 0, "CPU")
+            return _detected
+        props = torch.cuda.get_device_properties(0)
+        vram_mb = props.total_memory // (1024 * 1024)
+        name = props.name
+    except Exception:
+        _detected = ("cpu", 0, "CPU")
+        return _detected
+    # Margens: uma "12GB" reporta ~12288MB, uma "24GB" ~24564MB, etc.
+    if vram_mb < 14000:
+        profile = "rtx3060"
+    elif vram_mb < 30000:
+        profile = "gpu24"
+    else:
+        profile = "gpu48"
+    _detected = (profile, vram_mb, name)
+    return _detected
+
+
+def _log_profile_once(profile: str, gpu_name, vram_mb, auto: bool) -> None:
+    global _logged
+    if _logged:
+        return
+    _logged = True
+    import logging
+    log = logging.getLogger("dubbing")
+    if auto:
+        log.info(f"[GPU] {gpu_name} ({(vram_mb or 0) / 1024:.0f} GB) -> perfil automatico '{profile}'")
+        if profile == "cpu":
+            log.warning("[GPU] Nenhuma GPU NVIDIA encontrada: rodando na CPU (vai ser bem lento)")
+    else:
+        log.info(f"[GPU] Perfil forcado pelo DUB_PROFILE: '{profile}'")

@@ -3,9 +3,9 @@ os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 
 print("[PRELOAD] Baixando modelos...")
 
-print("[PRELOAD] 1/3 Whisper large-v3...")
+print("[PRELOAD] 1/3 Whisper large-v3-turbo...")
 from faster_whisper import WhisperModel
-WhisperModel("large-v3", device="cuda", compute_type="float16", download_root="/app/data/models/whisper")
+WhisperModel("large-v3-turbo", device="cuda", compute_type="float16", download_root="/app/data/models/whisper")
 print("[PRELOAD] Whisper ok")
 
 print("[PRELOAD] 2/3 opus-mt...")

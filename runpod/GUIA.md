@@ -7,7 +7,7 @@
 No seu PC (com Docker instalado):
 
 ```bash
-cd "D:\AI DUBBING"
+cd "G:\AI DUBBING"
 docker build -f runpod/Dockerfile -t luminadub-ai:latest .
 ```
 
@@ -35,7 +35,9 @@ docker push ghcr.io/seunome/luminadub-ai:latest
 2. Clique **"Deploy"** > **"Custom Container"**
 3. Configure:
    - **Image:** `seunome/luminadub-ai:latest`
-   - **GPU:** RTX 5090 ($0.99/h)
+   - **GPU:** qualquer NVIDIA (recomendado: L40S, RTX 4090 ou A6000).
+     O programa detecta a placa sozinho e escolhe o perfil certo
+     (veja o log: `[GPU] ... -> perfil automatico ...`).
    - **Volume:** `/app/data` (Network Storage - 50GB+)
    - **Port:** `5000`
    - **Start Command:** `bash /app/runpod/setup-pod.sh`

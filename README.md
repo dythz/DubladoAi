@@ -34,6 +34,26 @@ Leva mais ou menos o mesmo tempo que a duração do vídeo (numa RTX 3060).
 
 Pode colocar vários vídeos de uma vez: eles são dublados um atrás do outro. Se o computador desligar no meio, ao abrir o `start.bat` de novo ele continua de onde parou.
 
+## Placa de vídeo (detecção automática)
+
+O programa olha a placa quando abre e escolhe as configurações sozinho, pela VRAM:
+
+| VRAM | Perfil | O que muda |
+|------|--------|------------|
+| até 12 GB | `rtx3060` | descarrega modelos entre etapas, Whisper int8, lotes pequenos |
+| 16–24 GB | `gpu24` | todos os modelos ficam carregados, Whisper float16 |
+| 32 GB ou mais | `gpu48` | tudo carregado o tempo todo, inclusive o Ollama |
+| sem NVIDIA | `cpu` | roda na CPU (bem lento) |
+
+O perfil escolhido aparece no log: `[GPU] ... -> perfil automatico '...'`.
+Para forçar um perfil, defina `DUB_PROFILE` (ex.: `DUB_PROFILE=gpu24`).
+Se uma etapa ficar sem memória na placa, ela libera os outros modelos e tenta de novo.
+
+## Rodar no RunPod
+
+Para usar uma placa mais forte na nuvem e deixar a sua livre, veja [`runpod/GUIA.md`](runpod/GUIA.md).
+Recomendado: L40S, RTX 4090 ou RTX A6000.
+
 ## Dicas
 
 - **Placa com menos de 12 GB:** funciona, mas se ficar lento, feche jogos e outros programas que usam a placa enquanto dubla.

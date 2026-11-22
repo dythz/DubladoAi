@@ -45,6 +45,8 @@ COPY . .
 
 ENV HF_HUB_DISABLE_SYMLINKS=1
 ENV PYTHONUNBUFFERED=1
+# Detecta a GPU do pod e escolhe o perfil sozinho (config.py)
+ENV DUB_PROFILE=auto
 
 VOLUME ["/app/data"]
 EXPOSE 5000
