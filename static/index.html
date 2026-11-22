@@ -317,6 +317,23 @@ Prontos <span id="downloadsCount" class="bg-surface-container-high text-on-surfa
 </aside>
 </div>
 
+<!-- Tela de carregamento: modelos de IA sendo carregados na placa -->
+<div id="warmupOverlay" class="hidden fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+<div class="glass rounded-2xl w-full max-w-md p-6 anim-in" style="background:rgba(22,26,33,.97)">
+<div class="flex items-center gap-3 mb-1">
+<span class="material-symbols-outlined text-primary animate-spin" id="warmupSpin" style="font-size:22px">progress_activity</span>
+<h3 class="text-base font-bold" id="warmupTitle">Preparando os modelos de IA</h3>
+</div>
+<p class="text-xs text-on-surface-variant mb-4" id="warmupSub">Carregando tudo na placa de video antes do primeiro upload, pra dublagem ja comecar rapida.</p>
+<div id="warmupSteps" class="space-y-2 mb-4"></div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden mb-2"><div id="warmupBar" class="h-full bg-primary rounded-full shimmer transition-all duration-500" style="width:3%"></div></div>
+<div class="flex items-center justify-between">
+<span class="text-[10px] font-label text-on-surface-variant" id="warmupTime">0s</span>
+<button class="text-[10px] font-label text-on-surface-variant hover:text-primary transition-colors underline" onclick="hideWarmup(true)">Continuar mesmo assim</button>
+</div>
+</div>
+</div>
+
 <div id="voiceModal" class="hidden fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onclick="if(event.target===this)closeVoiceModal()">
 <div class="glass rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 anim-in" style="background:rgba(22,26,33,.97)">
 <div class="flex items-center justify-between mb-4">
@@ -1055,6 +1072,57 @@ function toggleSubtitles(){
     toggle.classList.toggle('active',subtitlesEnabled);
     if(t&&t.track)t.track.mode=subtitlesEnabled?'showing':'hidden';
 }
+
+// ── TELA DE CARREGAMENTO (modelos na placa) ──
+var warmupStart=Date.now(),warmupDismissed=false,warmupTimer=null,warmupWasShown=false;
+var WARMUP_ICON={pending:['radio_button_unchecked','text-on-surface-variant',''],loading:['progress_activity','text-primary animate-spin',''],ready:['check_circle','text-primary','FILL'],error:['error','text-error','FILL']};
+function hideWarmup(manual){
+    warmupDismissed=true;
+    document.getElementById('warmupOverlay').classList.add('hidden');
+    if(manual)toast('Pode enviar os videos: eles comecam assim que os modelos terminarem de carregar','info');
+}
+function drawWarmup(st){
+    var box=document.getElementById('warmupSteps');
+    var steps=st.steps||[];
+    if(st.state==='starting'||!steps.length){
+        box.innerHTML='<div class="flex items-center gap-2 text-xs text-on-surface-variant"><span class="material-symbols-outlined animate-spin text-primary" style="font-size:16px">progress_activity</span>Ligando o motor de IA...</div>';
+    }else{
+        box.innerHTML='';
+        steps.forEach(function(s){
+            var ic=WARMUP_ICON[s.status]||WARMUP_ICON.pending;
+            var row=document.createElement('div');
+            row.className='flex items-center gap-2 text-xs';
+            row.innerHTML='<span class="material-symbols-outlined '+ic[1]+'" style="font-size:16px;'+(ic[2]?"font-variation-settings:'FILL' 1":'')+'">'+ic[0]+'</span><span class="flex-1"></span><span class="text-[10px] font-label text-on-surface-variant">'+(s.seconds!=null?s.seconds+'s':(s.status==='loading'?'carregando...':''))+'</span>';
+            row.children[1].textContent=s.label+(s.status==='error'?' (carrega quando precisar)':'');
+            box.appendChild(row);
+        });
+    }
+    var done=steps.filter(function(s){return s.status==='ready'||s.status==='error'}).length;
+    var frac=steps.length?(done/steps.length):0.03;
+    document.getElementById('warmupBar').style.width=Math.max(3,Math.round(frac*100))+'%';
+    document.getElementById('warmupTime').textContent=fmt((Date.now()-warmupStart)/1000);
+}
+function pollWarmup(){
+    fetch('/api/warmup').then(function(r){return r.json()}).then(function(st){
+        var ready=st.state==='ready';
+        if(!ready&&!warmupDismissed){
+            document.getElementById('warmupOverlay').classList.remove('hidden');warmupWasShown=true;
+        }
+        drawWarmup(st);
+        setHeaderStatus(ready?'Pronto':'Carregando IA...',ready?'#00e9bf':'#00bdeb',ready?'rgba(0,233,191,0.1)':'rgba(0,189,235,0.1)');
+        if(ready){
+            clearInterval(warmupTimer);warmupTimer=null;
+            if(warmupWasShown&&!warmupDismissed){
+                document.getElementById('warmupTitle').textContent='Tudo pronto!';
+                document.getElementById('warmupSpin').textContent='check_circle';
+                document.getElementById('warmupSpin').classList.remove('animate-spin');
+                setTimeout(function(){hideWarmup(false)},700);
+            }
+            if(warmupWasShown)toast('Modelos carregados em '+(st.seconds!=null?st.seconds+'s':fmt((Date.now()-warmupStart)/1000))+' - pode mandar os videos','ok');
+        }
+    }).catch(function(){});
+}
+warmupTimer=setInterval(pollWarmup,1000);pollWarmup();
 
 // ── GPU WIDGET ──
 function pollGpu(){

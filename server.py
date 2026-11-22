@@ -298,6 +298,8 @@ class JobQueue:
                 "filename": filename,
                 "config_overrides": config_overrides,
                 "status": "queued",
+                # Caminho dentro da pasta do curso: o site agrupa a fila por pasta.
+                "rel_path": _project_meta(project_id).get("rel_path", ""),
                 "progress": 0.0,
                 "stage": "",
                 "started_at": None,
@@ -393,8 +395,8 @@ class JobQueue:
                 job.setdefault("result", "error")
                 job["finished_at"] = time.time()
                 self._done.append(job)
-                if len(self._done) > 20:
-                    self._done = self._done[-20:]
+                if len(self._done) > 1000:  # cursos inteiros na fila: guarda bastante
+                    self._done = self._done[-1000:]
                 self._active = None
                 sse_queues.pop(job["session_id"], None)
                 if self._queue:
@@ -428,7 +430,10 @@ class JobQueue:
                 s = dict(j)
                 s.pop("run_fn", None)
                 jobs.append(s)
-            for j in self._done[-10:]:
+            # Vídeos soltos: só os 10 últimos. Vídeos de pastas: todos (o site
+            # mostra o progresso da pasta inteira, ex. "12/42 prontas").
+            loose = [j for j in self._done if not j.get("rel_path")][-10:]
+            for j in [j for j in self._done if j.get("rel_path") or j in loose]:
                 s = dict(j)
                 s.pop("run_fn", None)
                 jobs.append(s)
@@ -538,7 +543,16 @@ def _resume_unfinished_projects():
         logger.info(f"[STARTUP] Re-queued {resumed} unfinished project(s) from a previous run")
 
 
+WARMUP_PATH = CONFIG.BASE_DIR / "data" / "warmup.json"
+
 if _IS_MAIN_PROCESS:
+    # Liga o worker JÁ, sem esperar o 1º upload: ele carrega os modelos na
+    # placa enquanto você escolhe os vídeos (o site mostra o progresso).
+    try:
+        WARMUP_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
+    job_queue._ensure_worker_alive()
     _resume_unfinished_projects()
 
 
@@ -668,6 +682,25 @@ def upload_chunk():
 def list_jobs():
     """List all queue jobs (active, queued, recent done)."""
     return jsonify({"jobs": job_queue.get_all_jobs()})
+
+
+@app.route("/api/warmup")
+def warmup_status():
+    """Progresso do carregamento dos modelos (tela de carregamento do site)."""
+    proc = job_queue._worker_process
+    alive = proc is not None and proc.is_alive()
+    try:
+        with open(WARMUP_PATH, "r", encoding="utf-8") as f:
+            status = json.load(f)
+    except (OSError, ValueError):
+        status = None
+    if not alive and job_queue._active is None:
+        # Worker reciclado e ainda sem vídeo na fila: já liga outro pra aquecer.
+        Thread(target=job_queue._ensure_worker_alive, daemon=True).start()
+    if status is None or not alive or (proc is not None and status.get("pid") != proc.pid):
+        # Worker ainda importando as bibliotecas (ou reiniciando).
+        return jsonify({"state": "starting", "steps": []})
+    return jsonify(status)
 
 
 @app.route("/api/gpu")

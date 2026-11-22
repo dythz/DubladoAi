@@ -308,6 +308,100 @@ def run(project_id: str, session_id: str, config_overrides: dict, event_queue, p
 MAX_JOBS_PER_WORKER = 10
 
 
+# --- Aquecimento ------------------------------------------------------------
+# Assim que o worker liga (junto com o servidor), carrega os modelos na placa,
+# ANTES de qualquer upload: o 1º vídeo já começa com tudo pronto, e nada disputa
+# disco/GPU com a dublagem (carregar o Qwen durante o Demucs deixava os dois
+# ~5x mais lentos na RTX 3060). O site mostra o progresso (/api/warmup).
+_WARMUP_STEPS = [
+    ("qwen3-tts", "Voz (Qwen3-TTS)"),
+    ("demucs", "Separacao de voz (Demucs)"),
+    ("whisper", "Transcricao (Whisper)"),
+    ("translation", "Tradutor (Opus-MT)"),
+]
+
+
+def warmup_status_path():
+    from config import Config
+    return Config().BASE_DIR / "data" / "warmup.json"
+
+
+def _write_warmup(path, status: dict) -> None:
+    import json
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def warmup_models() -> None:
+    log = logging.getLogger("dubbing")
+    from config import Config
+    config = Config()
+    path = config.BASE_DIR / "data" / "warmup.json"
+    keep = set(config.ALWAYS_WARM_MODELS) | {"qwen3-tts"}
+    steps = []
+    for kind, label in _WARMUP_STEPS:
+        # Num perfil que descarrega modelos entre etapas (12 GB), não adianta
+        # carregar o que seria tirado da placa logo no 1º vídeo.
+        if config.EVICT_IDLE_MODELS and kind not in keep:
+            continue
+        if kind == "translation" and config.TRANSLATION_ENGINE != "opus-mt":
+            continue
+        if kind == "qwen3-tts" and config.tts_engine != "qwen":
+            continue
+        steps.append({"id": kind, "label": label, "status": "pending", "seconds": None})
+    status = {"state": "loading", "pid": os.getpid(), "started": time.time(), "steps": steps}
+    _write_warmup(path, status)
+    t_all = time.time()
+    for step in steps:
+        step["status"] = "loading"
+        _write_warmup(path, status)
+        t0 = time.time()
+        try:
+            kind = step["id"]
+            if kind == "qwen3-tts":
+                from models import tts_qwen
+                use_fast = tts_qwen._fast_available(config)
+                slots = min(max(1, int(config.QWEN_PARALLEL)), tts_qwen._slot_limit) if use_fast else 1
+                for slot in range(slots):
+                    try:
+                        tts_qwen.get_model(config, use_fast, slot=slot, warm=True)
+                    except Exception as e:
+                        if slot == 0:
+                            raise
+                        tts_qwen._slot_limit = slot
+                        log.warning(f"[WARMUP] Qwen copy {slot} didn't fit ({e}); using {slot}")
+                        break
+                if slots > 1:
+                    step["label"] = f"Voz (Qwen3-TTS) x{min(slots, tts_qwen._slot_limit)}"
+                tts_qwen._log_vram()
+            elif kind == "demucs":
+                from models.demucs_model import DemucsModelWrapper
+                w = DemucsModelWrapper(config); w.load(); w.unload()
+            elif kind == "whisper":
+                from models.whisper_model import WhisperModelWrapper
+                w = WhisperModelWrapper(config); w.load(); w.unload()
+            elif kind == "translation":
+                from models.translation_model import TranslationModelWrapper
+                w = TranslationModelWrapper(config); w.load(); w.unload()
+            step["status"] = "ready"
+        except Exception as e:
+            step["status"] = "error"
+            step["error"] = str(e)[:200]
+            log.warning(f"[WARMUP] {step['label']} failed ({e}); it will load when a video needs it")
+        step["seconds"] = round(time.time() - t0, 1)
+        log.info(f"[WARMUP] {step['label']}: {step['status']} in {step['seconds']}s")
+        _write_warmup(path, status)
+    status["state"] = "ready"
+    status["seconds"] = round(time.time() - t_all, 1)
+    _write_warmup(path, status)
+    log.info(f"[WARMUP] Modelos prontos em {status['seconds']}s")
+
+
 def run_persistent(job_queue, event_queue, prefetch_queue=None) -> None:
     """Long-lived worker loop — processes jobs one at a time from job_queue,
     in the SAME process, so module-level model caches (models/model_cache.py)
@@ -320,6 +414,10 @@ def run_persistent(job_queue, event_queue, prefetch_queue=None) -> None:
     is_alive() and spawns a fresh persistent worker, same as before, just
     losing the warm cache for that one restart instead of every job."""
     logger.info(f"[PERSISTENT WORKER] Started, PID {os.getpid()}")
+    try:
+        warmup_models()
+    except Exception:
+        logger.exception("[WARMUP] Failed; models will load on demand")
     jobs_done = 0
     while True:
         item = job_queue.get()

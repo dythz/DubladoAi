@@ -216,6 +216,10 @@ PROFILES: dict[str, dict] = {
         # Demucs (~0.3GB) e Opus-MT (~1GB) são pequenos: ficam carregados entre
         # vídeos em vez de recarregar (~30 s) a cada um. Whisper ainda sai.
         "ALWAYS_WARM_MODELS": ["qwen3-tts", "qwen3-accent", "demucs", "translation"],
+        # Carregar o Qwen DURANTE o Demucs deixou os dois ~5x mais lentos aqui
+        # (disco e VRAM disputados). Os modelos já carregam quando o servidor
+        # liga (worker.warmup_models), então não precisa.
+        "QWEN_PRELOAD": False,
         "QWEN_PARALLEL": 1,
         "PIPELINE_OVERLAP": False,
     },
