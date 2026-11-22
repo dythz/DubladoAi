@@ -253,7 +253,7 @@ Iniciar Dublagem
 </div>
 <div class="glass rounded-xl overflow-hidden">
 <div class="video-wrapper" id="videoWrapper">
-<video id="resultVideo" preload="metadata" onclick="togglePlay()"><track id="subtitleTrack" kind="subtitles" srclang="pt" label="Portugues" default/></video>
+<video id="resultVideo" preload="metadata" onclick="togglePlay()"></video>
 <div id="playOverlay" class="play-overlay" onclick="togglePlay()"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">play_arrow</span></div>
 <div class="video-controls">
 <div class="seek-bar" id="seekBar"><div class="seek-fill" id="seekFill" style="width:0%"></div></div>
@@ -981,8 +981,7 @@ async function loadResults(pid){
         playerSection.classList.remove('anim-in');void playerSection.offsetWidth;playerSection.classList.add('anim-in');
         var videoEl=document.getElementById('resultVideo');
         if(resultFiles.video)videoEl.src=resultFiles.video;
-        var track=document.getElementById('subtitleTrack');
-        if(resultFiles.pt_vtt){track.src=resultFiles.pt_vtt;track.mode=subtitlesEnabled?'showing':'hidden'}
+        setSubtitleTrack(videoEl,resultFiles.pt_vtt);
         if(resultFiles.video)document.getElementById('dlVideo').href=resultFiles.video+'?download=1';
         if(resultFiles.pt_srt)document.getElementById('dlPtSrt').href=resultFiles.pt_srt;
         if(resultFiles.en_srt)document.getElementById('dlEnSrt').href=resultFiles.en_srt;
@@ -1037,11 +1036,24 @@ function togglePlay(){var v=document.getElementById('resultVideo');if(v.paused)v
 function toggleMute(){var v=document.getElementById('resultVideo');v.muted=!v.muted;document.querySelector('#muteBtn .material-symbols-outlined').textContent=v.muted?'volume_off':'volume_up'}
 function setVolume(val){document.getElementById('resultVideo').volume=val;document.querySelector('#muteBtn .material-symbols-outlined').textContent=val==0?'volume_off':'volume_up'}
 function toggleFullscreen(){var w=document.getElementById('videoWrapper');if(document.fullscreenElement)document.exitFullscreen();else w.requestFullscreen()}
+// Troca a legenda criando um <track> novo. So mudar o src do antigo faz o
+// navegador manter as legendas dos videos abertos antes (varias na tela juntas).
+function setSubtitleTrack(videoEl,url){
+    videoEl.querySelectorAll('track').forEach(function(t){t.remove()});
+    for(var i=0;i<videoEl.textTracks.length;i++)videoEl.textTracks[i].mode='disabled';
+    if(!url)return;
+    var t=document.createElement('track');
+    t.id='subtitleTrack';t.kind='subtitles';t.srclang='pt';t.label='Portugues';
+    t.src=url+(url.indexOf('?')<0?'?':'&')+'v='+Date.now();
+    videoEl.appendChild(t);
+    t.track.mode=subtitlesEnabled?'showing':'hidden';
+    t.addEventListener('load',function(){t.track.mode=subtitlesEnabled?'showing':'hidden'});
+}
 function toggleSubtitles(){
     subtitlesEnabled=!subtitlesEnabled;
-    var toggle=document.getElementById('subtitleToggle'),track=document.getElementById('subtitleTrack');
-    if(subtitlesEnabled){toggle.classList.add('active');if(track.src)track.mode='showing'}
-    else{toggle.classList.remove('active');if(track.src)track.mode='hidden'}
+    var toggle=document.getElementById('subtitleToggle'),t=document.getElementById('subtitleTrack');
+    toggle.classList.toggle('active',subtitlesEnabled);
+    if(t&&t.track)t.track.mode=subtitlesEnabled?'showing':'hidden';
 }
 
 // ── GPU WIDGET ──
